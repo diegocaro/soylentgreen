@@ -8,10 +8,104 @@ from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QLabel,
-    QSlider,
+    QHBoxLayout,
+    QPushButton,
 )
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QRect
+from PyQt6.QtGui import QImage, QPixmap, QPainter, QColor, QPen, QFont
+
+
+class CustomTimeline(QWidget):
+    timeSelected = pyqtSignal(datetime.datetime)
+
+    def __init__(self):
+        super().__init__()
+        self.setMinimumHeight(100)
+        self.setMaximumHeight(100)
+
+        self.videos = {}  # {datetime: filepath}
+        self.start_date = None
+        self.end_date = None
+        self.current_time = None
+        self.setMouseTracking(True)
+
+    def set_data(self, videos, start_date, end_date):
+        self.videos = videos
+        self.start_date = start_date
+        self.end_date = end_date
+        self.update()
+
+    def paintEvent(self, event):
+        if not self.start_date or not self.end_date:
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw background
+        painter.fillRect(event.rect(), QColor(40, 40, 40))
+
+        width = self.width()
+        height = self.height()
+        total_seconds = (self.end_date - self.start_date).total_seconds()
+
+        # Draw hour markers
+        painter.setPen(QPen(QColor(100, 100, 100), 1))
+        current_time = self.start_date
+        while current_time <= self.end_date:
+            x = int(
+                ((current_time - self.start_date).total_seconds() / total_seconds)
+                * width
+            )
+
+            # Major markers for days
+            if current_time.hour == 0:
+                painter.setPen(QPen(QColor(200, 200, 200), 2))
+                painter.drawLine(x, 0, x, height)
+                date_str = current_time.strftime("%Y-%m-%d")
+                painter.drawText(x + 5, 15, date_str)
+            # Minor markers for hours
+            elif current_time.hour % 6 == 0:
+                painter.setPen(QPen(QColor(100, 100, 100), 1))
+                painter.drawLine(x, height - 20, x, height)
+                painter.drawText(x - 10, height - 5, f"{current_time.hour:02d}:00")
+
+            current_time += datetime.timedelta(hours=1)
+
+        # Draw video segments
+        painter.setPen(QPen(QColor(0, 255, 0), 2))
+        for video_time in self.videos.keys():
+            x = int(
+                ((video_time - self.start_date).total_seconds() / total_seconds) * width
+            )
+            painter.drawLine(x, 20, x, height - 25)
+
+        # Draw current position
+        if self.current_time:
+            x = int(
+                ((self.current_time - self.start_date).total_seconds() / total_seconds)
+                * width
+            )
+            painter.setPen(QPen(QColor(255, 0, 0), 3))
+            painter.drawLine(x, 0, x, height)
+
+    def mousePressEvent(self, event):
+        if not self.start_date or not self.end_date:
+            return
+
+        width = self.width()
+        x = event.position().x()
+        total_seconds = (self.end_date - self.start_date).total_seconds()
+        target_seconds = (x / width) * total_seconds
+        target_time = self.start_date + datetime.timedelta(seconds=target_seconds)
+
+        # Find nearest video
+        nearest_time = min(
+            self.videos.keys(), key=lambda t: abs((t - target_time).total_seconds())
+        )
+        self.current_time = nearest_time
+        self.timeSelected.emit(nearest_time)
+        self.update()
 
 
 class VideoViewer(QMainWindow):
@@ -30,13 +124,24 @@ class VideoViewer(QMainWindow):
         self.video_label = QLabel()
         layout.addWidget(self.video_label)
 
-        # Timeline slider - will be configured after scanning files
-        self.timeline = QSlider(Qt.Orientation.Horizontal)
-        self.timeline.setMinimum(0)
-        self.timeline.valueChanged.connect(self.timeline_changed)
+        # Add controls layout
+        controls_layout = QHBoxLayout()
+
+        # Play/Pause button
+        self.play_button = QPushButton("Play")
+        self.play_button.clicked.connect(self.toggle_playback)
+        # controls_layout.addWidget(self.play_button)
+
+        # Add controls to main layout
+        layout.addLayout(controls_layout)
+
+        # Replace timeline slider with custom timeline
+        self.timeline = CustomTimeline()
+        self.timeline.timeSelected.connect(self.timeline_changed)
         layout.addWidget(self.timeline)
 
         # Video playback variables
+        self.is_playing = False
         self.video_path = "/Volumes/Cameras/aqara_video/lumi1.54ef44457bc9"
         self.cap = None
         self.current_video = None
@@ -83,40 +188,27 @@ class VideoViewer(QMainWindow):
         if self.video_files:
             self.start_date = min(self.video_files.keys())
             self.end_date = max(self.video_files.keys())
-
-            # Configure timeline range based on total minutes in video collection
-            total_minutes = int((self.end_date - self.start_date).total_seconds() / 60)
-            self.timeline.setMaximum(total_minutes)
-
+            self.timeline.set_data(self.video_files, self.start_date, self.end_date)
             print(f"Found videos from {self.start_date} to {self.end_date}")
-            print(f"Timeline range: {total_minutes} minutes")
 
-    def timeline_changed(self, value):
-        if not self.video_files or not self.start_date or not self.end_date:
-            return
-
-        # Convert slider value directly to target datetime
-        target_time = self.start_date + datetime.timedelta(minutes=value)
-
-        # Find nearest video within 30 minutes
-        nearest_time = None
-        min_diff = datetime.timedelta(minutes=30)
-
-        for video_time in self.video_files.keys():
-            diff = abs(video_time - target_time)
-            if diff < min_diff:
-                min_diff = diff
-                nearest_time = video_time
-
-        if nearest_time:
-            self.load_video(self.video_files[nearest_time])
+    def timeline_changed(self, selected_time):
+        if selected_time in self.video_files:
+            self.load_video(self.video_files[selected_time])
 
     def load_video(self, video_path):
         if self.cap is not None:
             self.cap.release()
 
         self.cap = cv2.VideoCapture(video_path)
+        if not self.cap.isOpened():
+            print(f"Error opening video: {video_path}")
+            return
+
         self.current_video = video_path
+
+        # Start playing when a new video is loaded
+        if not self.is_playing:
+            self.toggle_playback()
 
         # After loading video, update window title with current video datetime
         if self.current_video:
@@ -133,14 +225,38 @@ class VideoViewer(QMainWindow):
             except ValueError:
                 self.setWindowTitle("Camera Video Viewer")
 
+    def toggle_playback(self):
+        self.is_playing = not self.is_playing
+        self.play_button.setText("Pause" if self.is_playing else "Play")
+
+        if self.is_playing:
+            self.timer.start(33)  # ~30 fps
+        else:
+            self.timer.stop()
+
     def update_frame(self):
-        if self.cap is None or not self.cap.isOpened():
+        if not self.is_playing or self.cap is None or not self.cap.isOpened():
             return
 
         ret, frame = self.cap.read()
         if not ret:
-            # Video ended, reload it
-            self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            # Video ended, move to next available video
+            current_time = None
+            for video_time in sorted(self.video_files.keys()):
+                if Path(self.video_files[video_time]) == Path(self.current_video):
+                    # Find next video
+                    times = sorted(self.video_files.keys())
+                    current_idx = times.index(video_time)
+                    if current_idx + 1 < len(times):
+                        current_time = times[current_idx + 1]
+                    break
+
+            if current_time:
+                self.timeline.current_time = current_time
+                self.load_video(self.video_files[current_time])
+                self.timeline.update()
+            else:
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             return
 
         # Convert frame to QImage
