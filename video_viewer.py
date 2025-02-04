@@ -30,10 +30,9 @@ class VideoViewer(QMainWindow):
         self.video_label = QLabel()
         layout.addWidget(self.video_label)
 
-        # Timeline slider
+        # Timeline slider - will be configured after scanning files
         self.timeline = QSlider(Qt.Orientation.Horizontal)
         self.timeline.setMinimum(0)
-        self.timeline.setMaximum(24 * 60)  # Minutes in a day
         self.timeline.valueChanged.connect(self.timeline_changed)
         layout.addWidget(self.timeline)
 
@@ -84,23 +83,33 @@ class VideoViewer(QMainWindow):
         if self.video_files:
             self.start_date = min(self.video_files.keys())
             self.end_date = max(self.video_files.keys())
+
+            # Configure timeline range based on total minutes in video collection
+            total_minutes = int((self.end_date - self.start_date).total_seconds() / 60)
+            self.timeline.setMaximum(total_minutes)
+
             print(f"Found videos from {self.start_date} to {self.end_date}")
+            print(f"Timeline range: {total_minutes} minutes")
 
     def timeline_changed(self, value):
         if not self.video_files or not self.start_date or not self.end_date:
             return
 
-        # Convert slider value (0-1440) to datetime
-        total_minutes = (self.end_date - self.start_date).total_seconds() / 60
-        target_minutes = value
-        target_time = self.start_date + datetime.timedelta(minutes=target_minutes)
+        # Convert slider value directly to target datetime
+        target_time = self.start_date + datetime.timedelta(minutes=value)
 
-        # Find nearest video
-        nearest_time = min(
-            self.video_files.keys(),
-            key=lambda x: abs((x - target_time).total_seconds()),
-        )
-        self.load_video(self.video_files[nearest_time])
+        # Find nearest video within 30 minutes
+        nearest_time = None
+        min_diff = datetime.timedelta(minutes=30)
+
+        for video_time in self.video_files.keys():
+            diff = abs(video_time - target_time)
+            if diff < min_diff:
+                min_diff = diff
+                nearest_time = video_time
+
+        if nearest_time:
+            self.load_video(self.video_files[nearest_time])
 
     def load_video(self, video_path):
         if self.cap is not None:
