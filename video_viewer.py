@@ -17,7 +17,6 @@ from PyQt6.QtGui import QImage, QPixmap
 class VideoViewer(QMainWindow):
     def __init__(self):
         super().__init__()
-        print("Initializing VideoViewer...")
         self.setWindowTitle("Camera Video Viewer")
         self.setGeometry(100, 100, 800, 600)
 
@@ -40,16 +39,12 @@ class VideoViewer(QMainWindow):
 
         # Video playback variables
         self.video_path = "/Volumes/Cameras/aqara_video/lumi1.54ef44457bc9"
-        if not Path(self.video_path).exists():
-            print(f"Error: Video directory not found: {self.video_path}")
-            self.video_path = "."  # Fallback to current directory
-
         self.cap = None
         self.current_video = None
-        self.video_files = {}
-        print("Scanning for video files...")
+        self.video_files = {}  # Changed to {datetime: filepath}
+        self.start_date = None
+        self.end_date = None
         self.scan_video_files()
-        print(f"Found {len(self.video_files)} video files")
 
         # Timer for video playback
         self.timer = QTimer()
@@ -58,41 +53,76 @@ class VideoViewer(QMainWindow):
 
     def scan_video_files(self):
         base_path = Path(self.video_path)
+        self.video_files.clear()
+
         for day_dir in base_path.glob("*"):
             if not day_dir.is_dir() or not day_dir.name.isdigit():
                 continue
 
-            for video_file in day_dir.glob("*.mp4"):
-                time_str = video_file.stem
-                if len(time_str) != 6:
-                    continue
+            try:
+                day = datetime.datetime.strptime(day_dir.name, "%Y%m%d")
 
-                try:
-                    hour = int(time_str[:2])
-                    minute = int(time_str[2:4])
-                    minutes_of_day = hour * 60 + minute
-                    self.video_files[minutes_of_day] = str(video_file)
-                except ValueError:
-                    continue
+                for video_file in day_dir.glob("*.mp4"):
+                    time_str = video_file.stem
+                    if len(time_str) != 6:
+                        continue
+
+                    try:
+                        hour = int(time_str[:2])
+                        minute = int(time_str[2:4])
+                        second = int(time_str[4:6])
+
+                        video_datetime = day.replace(
+                            hour=hour, minute=minute, second=second
+                        )
+                        self.video_files[video_datetime] = str(video_file)
+                    except ValueError:
+                        continue
+            except ValueError:
+                continue
+
+        if self.video_files:
+            self.start_date = min(self.video_files.keys())
+            self.end_date = max(self.video_files.keys())
+            print(f"Found videos from {self.start_date} to {self.end_date}")
 
     def timeline_changed(self, value):
-        target_time = value
-        if target_time in self.video_files:
-            self.load_video(self.video_files[target_time])
+        if not self.video_files or not self.start_date or not self.end_date:
+            return
+
+        # Convert slider value (0-1440) to datetime
+        total_minutes = (self.end_date - self.start_date).total_seconds() / 60
+        target_minutes = value
+        target_time = self.start_date + datetime.timedelta(minutes=target_minutes)
+
+        # Find nearest video
+        nearest_time = min(
+            self.video_files.keys(),
+            key=lambda x: abs((x - target_time).total_seconds()),
+        )
+        self.load_video(self.video_files[nearest_time])
 
     def load_video(self, video_path):
-        try:
-            if self.cap is not None:
-                self.cap.release()
+        if self.cap is not None:
+            self.cap.release()
 
-            print(f"Loading video: {video_path}")
-            self.cap = cv2.VideoCapture(video_path)
-            if not self.cap.isOpened():
-                print(f"Error: Could not open video file: {video_path}")
-                return
-            self.current_video = video_path
-        except Exception as e:
-            print(f"Error loading video: {e}")
+        self.cap = cv2.VideoCapture(video_path)
+        self.current_video = video_path
+
+        # After loading video, update window title with current video datetime
+        if self.current_video:
+            video_path = Path(self.current_video)
+            day_str = video_path.parent.name
+            time_str = video_path.stem
+            try:
+                date = datetime.datetime.strptime(
+                    f"{day_str}{time_str}", "%Y%m%d%H%M%S"
+                )
+                self.setWindowTitle(
+                    f"Camera Video Viewer - {date.strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+            except ValueError:
+                self.setWindowTitle("Camera Video Viewer")
 
     def update_frame(self):
         if self.cap is None or not self.cap.isOpened():
@@ -120,15 +150,10 @@ class VideoViewer(QMainWindow):
 
 
 def main():
-    try:
-        app = QApplication(sys.argv)
-        print("Starting Video Viewer application...")
-        viewer = VideoViewer()
-        viewer.show()
-        sys.exit(app.exec())
-    except Exception as e:
-        print(f"Fatal error: {e}")
-        sys.exit(1)
+    app = QApplication(sys.argv)
+    viewer = VideoViewer()
+    viewer.show()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
