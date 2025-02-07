@@ -3,6 +3,7 @@ import argparse
 import logging
 from dataclasses import dataclass
 from typing import List, Optional
+import os
 
 
 @dataclass(frozen=True)
@@ -127,7 +128,7 @@ def main():
     parser.add_argument(
         "--frame", type=int, help="Frame number to capture (only for video files)"
     )
-    parser.add_argument("--output", default="captured_frame.jpg", help="Output path")
+    parser.add_argument("--output", required=True, help="Output path")
     parser.add_argument("--stream", type=int, help="Stream index to capture")
     parser.add_argument("--resolution", help="Desired resolution (e.g., 1920x1080)")
 
@@ -138,6 +139,9 @@ def main():
     )
 
     try:
+        if os.path.exists(args.output):
+            raise ValueError(f"Output file {args.output} already exists")
+
         with VideoCapture(source) as vc:
             if isinstance(source, int):
                 resolutions = vc.get_supported_resolutions()
