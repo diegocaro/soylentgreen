@@ -150,7 +150,7 @@ class Clip:
         process = (
             ffmpeg.input(str(self.path))
             .output(
-                "pipe:", format="rawvideo", pix_fmt="rgb24", vframes=1, loglevel="quiet"
+                "pipe:", format="rawvideo", pix_fmt="bgr24", vframes=1, loglevel="quiet"
             )
             .global_args("-map", f"0:{stream.stream_index}")
             .run_async(pipe_stdout=True)
@@ -198,7 +198,7 @@ class Timeline:
     ) -> None:
 
         filtered_clips = self.search_clips(date_from, date_to)
-        k = 1
+        k = 10
         for clip in filtered_clips[::k]:
             print(clip)
 
