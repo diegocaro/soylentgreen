@@ -5,11 +5,18 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 import ffmpeg
-import cv2 as cv
+import cv2
+
 
 import numpy as np
 from tqdm import tqdm
 from joblib import Parallel, delayed
+
+import threading
+from queue import Queue
+from concurrent.futures import ThreadPoolExecutor
+
+PIXEL_FORMAT = "bgr24"
 
 
 @dataclass
@@ -31,7 +38,7 @@ class VideoStream:
         )
 
 
-def dynamic_range(frame: np.ndarray) -> Dict[str, float]:
+def dynamic_range(frame: cv2.Mat) -> Dict[str, float]:
     """
     Analyze the dynamic range in a frame.
 
@@ -111,8 +118,8 @@ class Clip:
         )
         return VideoStream.from_metadata(hd_stream)
 
-    def read_frame_opencv(self) -> Optional[cv.Mat]:
-        cap = cv.VideoCapture(self.path.as_posix())
+    def read_frame_opencv(self) -> Optional[cv2.Mat]:
+        cap = cv2.VideoCapture(self.path.as_posix())
         # stream_index = self.get_hd_track()
         # print(f"Reading stream {stream_index}")
 
@@ -134,7 +141,11 @@ class Clip:
         out, _ = (
             ffmpeg.input(str(self.path))
             .output(
-                "pipe:", format="rawvideo", pix_fmt="rgb24", vframes=1, loglevel="quiet"
+                "pipe:",
+                format="rawvideo",
+                pix_fmt=PIXEL_FORMAT,
+                vframes=1,
+                loglevel="quiet",
             )
             .global_args("-map", f"0:{stream.stream_index}")
             .run()
@@ -169,6 +180,7 @@ class Clip:
 
 class Timeline:
     def __init__(self, video_path: Path):
+        self.video_path = video_path
         self.clips = self.get_clips(video_path)
 
     def get_clips(self, video_path: Path) -> List[Clip]:
@@ -193,40 +205,16 @@ class Timeline:
             clips.append(clip)
         return clips
 
-    def show(
-        self, date_from: Optional[datetime] = None, date_to: Optional[datetime] = None
-    ) -> None:
-
-        filtered_clips = self.search_clips(date_from, date_to)
-        k = 10
-        for clip in filtered_clips[::k]:
-            print(clip)
-
-            frame = clip.read_frame()
-            colors = dynamic_range(frame)
-            print(colors)
-            cv.imshow("frame", frame)
-
-            if cv.waitKey(1) == ord("q"):
-                break
-
-        cv.destroyAllWindows()
-
-    def create(
+    def create_timelapse(
         self,
         output: Path,
-        date_from: Optional[datetime] = None,
-        date_to: Optional[datetime] = None,
+        clips: List[Clip],
     ) -> None:
-        filtered_clips = self.search_clips(date_from, date_to)
-        filtered_clips = filtered_clips[::10]
-        print("num clips", len(filtered_clips))
-
         # Process in batches of 100
         batch_size = 100
 
         # Get dimensions from first clip
-        first_frame = filtered_clips[0].read_frame()
+        first_frame = clips[0].read_frame()
         height, width = first_frame.shape[:2]
 
         # Setup ffmpeg process
@@ -234,7 +222,7 @@ class Timeline:
             ffmpeg.input(
                 "pipe:",
                 format="rawvideo",
-                pix_fmt="rgb24",
+                pix_fmt=PIXEL_FORMAT,
                 s=f"{width}x{height}",
                 framerate=30,
             )
@@ -244,10 +232,10 @@ class Timeline:
         )
 
         try:
-            for i in range(0, len(filtered_clips), batch_size):
-                batch = filtered_clips[i : i + batch_size]
+            for i in range(0, len(clips), batch_size):
+                batch = clips[i : i + batch_size]
                 print(
-                    f"Processing batch {i//batch_size + 1}/{(len(filtered_clips)-1)//batch_size + 1}"
+                    f"Processing batch {i//batch_size + 1}/{(len(clips)-1)//batch_size + 1}"
                 )
 
                 batch_frames = Parallel(n_jobs=-1, verbose=10)(
@@ -263,6 +251,112 @@ class Timeline:
             # Cleanup
             process.stdin.close()
             process.wait()
+
+
+class VideoPlayer:
+    def show(self, clips: List[Clip]) -> None:
+        for clip in clips:
+            print(clip)
+            frame = clip.read_frame()
+            colors = dynamic_range(frame)
+            print(colors)
+            self.draw(frame)
+
+        cv2.destroyAllWindows()
+
+    def draw(self, frame: cv2.Mat):
+        if frame is None:
+            return
+        cv2.imshow("frame", frame)
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            exit()
+
+    def show_threaded(self, clips: List[Clip], num_workers: int = 4) -> None:
+        frame_queue = Queue(maxsize=1000)
+
+        def read_frame(clip: Clip):
+            frame = clip.read_frame()
+            frame_queue.put((clip, frame))
+
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            futures = [executor.submit(read_frame, clip) for clip in clips]
+
+            frames_processed = 0
+            total_frames = len(filtered_clips)
+
+            while frames_processed < total_frames:
+                clip, frame = frame_queue.get()
+                if frame is not None:
+                    self.draw(frame)
+                frames_processed += 1
+                if frames_processed % 10 == 0:
+                    print(clip)
+                    print(f"Progress: {frames_processed}/{total_frames}")
+
+    def show_threaded_old(self, clips: List[Clip]) -> None:
+        def read_frames(clips: List[Clip], frame_queue: Queue):
+            for clip in clips:
+                frame = clip.read_frame()
+                frame_queue.put(frame)
+
+        frame_queue = Queue()
+        workers = threading.Thread(
+            target=read_frames,
+            args=(clips, frame_queue),
+            daemon=True,
+        )
+        workers.start()
+
+        def draw_frames(frame_queue: Queue):
+            while True:
+                frame = frame_queue.get()
+                self.draw(frame)
+
+        draw_frames(frame_queue)
+
+    def show_joblib(self, clips: List[Clip]) -> None:
+        def read_and_process_frame(clip: Clip):
+            frame = clip.read_frame()
+            if frame is None:
+                return None
+            frame_copy = frame.copy()
+            info = dynamic_range(frame_copy)
+
+            # Define text and font parameters
+            text = f"Dynamic Range: {info['dynamic_range']:.2f}%"
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 1
+            thickness = 2
+
+            # Get text size
+            (text_width, text_height), baseline = cv2.getTextSize(
+                text, font, font_scale, thickness
+            )
+
+            # Calculate position (10 pixels from left, 20 from top)
+            x = 10
+            y = text_height + 10  # y is the bottom-left corner of the text
+
+            print(
+                f"Text dimensions: {text_width}x{text_height} pixels (baseline: {baseline})"
+            )
+
+            cv2.putText(
+                frame_copy,
+                text,
+                (x, y),
+                font,
+                font_scale,
+                (0, 255, 0),
+                thickness,
+            )
+            return frame_copy
+
+        res = Parallel(n_jobs=-1, verbose=10, return_as="generator")(
+            delayed(clip.read_frame)() for clip in clips
+        )
+        for frame in res:
+            self.draw(frame)
 
 
 def parse_datetime(date_str: str) -> Optional[datetime]:
@@ -297,13 +391,19 @@ def main():
         type=parse_datetime,
     )
     parser.add_argument("--create", help="Create timelapse video", action="store_true")
-
+    parser.add_argument("--skip", help="Sample clips", type=int, default=1)
     args = parser.parse_args()
 
     # video_path = "/Volumes/Cameras/aqara_video/lumi1.54ef44457bc9"
     timeline = Timeline(Path(args.source))
     # print(timeline)
-
+    clips = timeline.search_clips(args.date_from, args.date_to)
+    print(f"Found {len(clips)} clips at {args.source}")
+    filtered_clips = clips[:: args.skip]
+    print(f"Using {len(filtered_clips)} clips")
+    player = VideoPlayer()
+    player.show_joblib(filtered_clips)
+    exit()
     if args.create:
         timeline.create(Path("output.mp4"), args.date_from, args.date_to)
     else:
