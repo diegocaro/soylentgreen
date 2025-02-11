@@ -17,6 +17,7 @@ from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 
 PIXEL_FORMAT = "bgr24"
+CRF_VALUE = 23  # Constant Rate Factor (0-51), lower is better, default: 23
 
 
 @dataclass
@@ -53,6 +54,7 @@ def dynamic_range(frame: cv2.Mat) -> Dict[str, float]:
             "dynamic_range": 0.0,
             "mean_brightness": 0.0,
             "std_brightness": 0.0,
+            "greeness": 0.0,
         }
 
     # Calculate brightness (using standard formula: 0.2126*R + 0.7152*G + 0.0722*B)
@@ -67,13 +69,53 @@ def dynamic_range(frame: cv2.Mat) -> Dict[str, float]:
     p95 = np.percentile(brightness, 95)
     dynamic_range = (p95 - p05) / 255.0  # Normalize to [0,1]
 
+    greeness = np.mean(frame[:, :, 1] - frame[:, :, 0])
+
     distribution = {
         "dynamic_range": dynamic_range * 100,  # Convert to percentage
         "mean_brightness": mean_brightness,
         "std_brightness": std_brightness,
+        "greeness": greeness,
     }
 
     return distribution
+
+
+def process_frame(frame: cv2.Mat) -> cv2.Mat:
+    if frame is None:
+        return None
+    frame_copy = frame.copy()
+    info = dynamic_range(frame_copy)
+    if info["greeness"] < 0.2:
+        return None
+
+    # Define text and font parameters
+    text = f"Greeness: {info['greeness']:.2f}%"
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 1
+    thickness = 2
+
+    # Get text size
+    (text_width, text_height), baseline = cv2.getTextSize(
+        text, font, font_scale, thickness
+    )
+
+    # Calculate position (10 pixels from left, 20 from top)
+    x = 10
+    y = text_height + 10  # y is the bottom-left corner of the text
+
+    # print(f"Text dimensions: {text_width}x{text_height} pixels (baseline: {baseline})")
+
+    cv2.putText(
+        frame_copy,
+        text,
+        (x, y),
+        font,
+        font_scale,
+        (0, 255, 0),
+        thickness,
+    )
+    return frame_copy
 
 
 @dataclass()
@@ -218,7 +260,7 @@ class Timeline:
         height, width = first_frame.shape[:2]
 
         # Setup ffmpeg process
-        process = (
+        encoder = (
             ffmpeg.input(
                 "pipe:",
                 format="rawvideo",
@@ -226,10 +268,19 @@ class Timeline:
                 s=f"{width}x{height}",
                 framerate=30,
             )
-            .output(str(output), pix_fmt="yuv420p", vcodec="libx264", crf=23)
+            .output(
+                str(output),
+                pix_fmt="yuv420p",
+                vcodec="libx264",
+                crf=CRF_VALUE,
+                loglevel="quiet",
+            )
             .overwrite_output()
             .run_async(pipe_stdin=True)
         )
+
+        def process(clip: Clip) -> cv2.Mat:
+            return process_frame(clip.read_frame())
 
         try:
             for i in range(0, len(clips), batch_size):
@@ -238,19 +289,22 @@ class Timeline:
                     f"Processing batch {i//batch_size + 1}/{(len(clips)-1)//batch_size + 1}"
                 )
 
-                batch_frames = Parallel(n_jobs=-1, verbose=10)(
-                    delayed(clip.read_frame)() for clip in batch
+                batch_frames = Parallel(n_jobs=-1, verbose=10, return_as="generator")(
+                    delayed(process)(clip) for clip in batch
                 )
 
                 # Write frames to video
                 for frame in batch_frames:
                     if frame is not None:
-                        process.stdin.write(frame.tobytes())
+                        cv2.imshow("frame", frame)
+                        if cv2.waitKey(1) & 0xFF == ord("q"):
+                            exit()
+                        encoder.stdin.write(frame.tobytes())
 
         finally:
             # Cleanup
-            process.stdin.close()
-            process.wait()
+            encoder.stdin.close()
+            encoder.wait()
 
 
 class VideoPlayer:
@@ -315,45 +369,11 @@ class VideoPlayer:
         draw_frames(frame_queue)
 
     def show_joblib(self, clips: List[Clip]) -> None:
-        def read_and_process_frame(clip: Clip):
-            frame = clip.read_frame()
-            if frame is None:
-                return None
-            frame_copy = frame.copy()
-            info = dynamic_range(frame_copy)
-
-            # Define text and font parameters
-            text = f"Dynamic Range: {info['dynamic_range']:.2f}%"
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            font_scale = 1
-            thickness = 2
-
-            # Get text size
-            (text_width, text_height), baseline = cv2.getTextSize(
-                text, font, font_scale, thickness
-            )
-
-            # Calculate position (10 pixels from left, 20 from top)
-            x = 10
-            y = text_height + 10  # y is the bottom-left corner of the text
-
-            print(
-                f"Text dimensions: {text_width}x{text_height} pixels (baseline: {baseline})"
-            )
-
-            cv2.putText(
-                frame_copy,
-                text,
-                (x, y),
-                font,
-                font_scale,
-                (0, 255, 0),
-                thickness,
-            )
-            return frame_copy
+        def process(clip: Clip) -> cv2.Mat:
+            return process_frame(clip.read_frame())
 
         res = Parallel(n_jobs=-1, verbose=10, return_as="generator")(
-            delayed(clip.read_frame)() for clip in clips
+            delayed(process)(clip) for clip in clips
         )
         for frame in res:
             self.draw(frame)
@@ -390,6 +410,10 @@ def main():
         help="End date (inclusive) format YYYYMMDD-HHMMSS localtime",
         type=parse_datetime,
     )
+    parser.add_argument(
+        "--day", help="Day to process in format YYYYMMDD", type=parse_datetime
+    )
+    parser.add_argument("--output", help="Output file", type=Path)
     parser.add_argument("--create", help="Create timelapse video", action="store_true")
     parser.add_argument("--skip", help="Sample clips", type=int, default=1)
     args = parser.parse_args()
@@ -397,18 +421,22 @@ def main():
     # video_path = "/Volumes/Cameras/aqara_video/lumi1.54ef44457bc9"
     timeline = Timeline(Path(args.source))
     # print(timeline)
+    if args.day:
+        date_from = args.day.replace(hour=0, minute=0, second=0)
+        date_to = args.day.replace(hour=23, minute=59, second=59)
+        args.date_from = date_from
+        args.date_to = date_to
     clips = timeline.search_clips(args.date_from, args.date_to)
     print(f"Found {len(clips)} clips at {args.source}")
     filtered_clips = clips[:: args.skip]
     print(f"Using {len(filtered_clips)} clips")
-    player = VideoPlayer()
-    player.show_joblib(filtered_clips)
-    exit()
+
     if args.create:
-        timeline.create(Path("output.mp4"), args.date_from, args.date_to)
+        timeline.create_timelapse(args.output, filtered_clips)
     else:
-        timeline.show(args.date_from, args.date_to)
-        # print(timeline.clips[0].get_hd_track())
+        player = VideoPlayer()
+        player.show_joblib(filtered_clips)
+        exit()
 
 
 if __name__ == "__main__":
