@@ -86,17 +86,20 @@ def dynamic_range(frame: cv2.Mat) -> Dict[str, float]:
     return distribution
 
 
-def process_frame(frame: cv2.Mat) -> cv2.Mat:
+def post_process(
+    frame: cv2.Mat,
+    features: Dict[str, float],
+    green_threshold: float = 0.2,
+) -> cv2.Mat:
     if frame is None:
         return None
 
     frame_copy = frame.copy()
-    info = dynamic_range(frame_copy)
-    if info["greeness"] < 0.2:
+
+    greeness = features.get("greeness", 0.0)
+    if green_threshold > 0 and greeness < green_threshold:
         return None
 
-    # Define text and font parameters
-    greeness = info.get("greeness", 0.0)
     text = f"Greeness score: {greeness:.2f}"
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 1
@@ -202,7 +205,7 @@ class Clip:
 
         return np.frombuffer(out, np.uint8).reshape([stream.height, stream.width, 3])
 
-    def read_frame(self):
+    def read_frame(self) -> cv2.Mat:
         stream = self.best_video_stream(self.get_metadata())
         if not stream:
             return None
@@ -258,6 +261,7 @@ class Timeline:
         self,
         output: Path,
         clips: List[Clip],
+        green_threshold: float = 0.2,
     ) -> None:
         # Process in batches of 100
         batch_size = 100
@@ -287,7 +291,11 @@ class Timeline:
         )
 
         def process(clip: Clip) -> cv2.Mat:
-            return process_frame(clip.read_frame())
+            frame = clip.read_frame()
+            features = dynamic_range(frame)
+            return post_process(
+                frame, green_threshold=green_threshold, features=features
+            )
 
         try:
             for i in range(0, len(clips), batch_size):
@@ -375,9 +383,13 @@ class VideoPlayer:
 
         draw_frames(frame_queue)
 
-    def show_joblib(self, clips: List[Clip]) -> None:
+    def show_joblib(self, clips: List[Clip], green_threshold: float = 0.2) -> None:
         def process(clip: Clip) -> cv2.Mat:
-            return process_frame(clip.read_frame())
+            frame = clip.read_frame()
+            features = dynamic_range(frame)
+            return post_process(
+                frame, green_threshold=green_threshold, features=features
+            )
 
         res = Parallel(n_jobs=-1, verbose=10, return_as="generator")(
             delayed(process)(clip) for clip in clips
@@ -421,8 +433,10 @@ def main():
         "--day", help="Day to process in format YYYYMMDD", type=parse_datetime
     )
     parser.add_argument("--output", help="Output file", type=Path)
-    parser.add_argument("--create", help="Create timelapse video", action="store_true")
     parser.add_argument("--skip", help="Sample clips", type=int, default=1)
+    parser.add_argument(
+        "--green-threshold", help="Greeness threshold", type=float, default=0.2
+    )
     args = parser.parse_args()
 
     # video_path = "/Volumes/Cameras/aqara_video/lumi1.54ef44457bc9"
@@ -438,11 +452,13 @@ def main():
     filtered_clips = clips[:: args.skip]
     print(f"Using {len(filtered_clips)} clips")
 
-    if args.create:
-        timeline.create_timelapse(args.output, filtered_clips)
+    if args.output:
+        timeline.create_timelapse(
+            args.output, filtered_clips, green_threshold=args.green_threshold
+        )
     else:
         player = VideoPlayer()
-        player.show_joblib(filtered_clips)
+        player.show_joblib(filtered_clips, green_threshold=args.green_threshold)
         exit()
 
 
