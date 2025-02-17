@@ -69,7 +69,12 @@ def dynamic_range(frame: cv2.Mat) -> Dict[str, float]:
     p95 = np.percentile(brightness, 95)
     dynamic_range = (p95 - p05) / 255.0  # Normalize to [0,1]
 
-    greeness = np.mean(frame[:, :, 1] - frame[:, :, 0])
+    b, g, r = cv2.split(frame)
+
+    # Calculate greeness as the difference between green and other channels
+    # Higher values indicate more grass-like colors
+    greeness = np.mean(g) - (np.mean(r) + np.mean(b)) / 2
+    # greeness = np.mean(frame[:, :, 1] - frame[:, :, 0])
 
     distribution = {
         "dynamic_range": dynamic_range * 100,  # Convert to percentage
@@ -84,13 +89,15 @@ def dynamic_range(frame: cv2.Mat) -> Dict[str, float]:
 def process_frame(frame: cv2.Mat) -> cv2.Mat:
     if frame is None:
         return None
+
     frame_copy = frame.copy()
     info = dynamic_range(frame_copy)
     if info["greeness"] < 0.2:
         return None
 
     # Define text and font parameters
-    text = f"Greeness: {info['greeness']:.2f}%"
+    greeness = info.get("greeness", 0.0)
+    text = f"Greeness score: {greeness:.2f}"
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 1
     thickness = 2
