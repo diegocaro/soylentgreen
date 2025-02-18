@@ -1,12 +1,12 @@
-import torch
-from torchvision import models, transforms
-import cv2
-from PIL import Image
-
-import threading
-from queue import Queue
 import argparse
+import threading
 from pathlib import Path
+from queue import Queue
+
+import cv2
+import torch
+from PIL import Image
+from torchvision import models, transforms
 
 
 class Detector:

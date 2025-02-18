@@ -1,20 +1,17 @@
 import argparse
-from queue import Queue
-from typing import Any, Dict, List, Optional, Tuple
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-import ffmpeg
-import cv2
-
-
-import numpy as np
-from tqdm import tqdm
-from joblib import Parallel, delayed
-
-import threading
 from queue import Queue
-from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Dict, List, Optional, Tuple
+
+import cv2
+import ffmpeg
+import numpy as np
+from joblib import Parallel, delayed
+from tqdm import tqdm
 
 PIXEL_FORMAT = "bgr24"
 CRF_VALUE = 23  # Constant Rate Factor (0-51), lower is better, default: 23
