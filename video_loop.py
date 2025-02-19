@@ -1,5 +1,6 @@
 import argparse
 import threading
+from abc import ABC, abstractmethod
 from pathlib import Path
 from queue import Queue
 
@@ -48,7 +49,13 @@ class Detector:
             return ans
 
 
-class VideoProducer:
+class VideoAbstract(ABC):
+    @abstractmethod
+    def capture(self):
+        pass
+
+
+class VideoOpenCV(VideoAbstract):
     def __init__(self, camera_id: int = 0):
         self.camera_id = camera_id
         self.cap = self.open_device(camera_id)
@@ -70,11 +77,49 @@ class VideoProducer:
 
 
 class VideoLoop:
-    def __init__(self, video_producer: VideoProducer):
+    def __init__(self, video_producer: VideoAbstract):
         self.video_producer = video_producer
 
-    def capture(self):
-        return self.video_producer.capture()
+    def _draw_box_with_label(
+        self, frame, box, label, score, box_color=(0, 255, 0), text_color=(0, 0, 0)
+    ):
+        text_params = {
+            "fontFace": cv2.FONT_HERSHEY_SIMPLEX,
+            "fontScale": 1,
+            "thickness": 2,
+        }
+        x1, y1, x2, y2 = box
+        # Draw the bounding box
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+        # Create label text
+        label_text = f"{label}: {score:.2f}"
+
+        # Get text size
+        (text_width, text_height), baseline = cv2.getTextSize(label_text, **text_params)
+        border = 5
+        text_width += border
+        text_height += border
+
+        # Draw filled rectangle for text background
+        cv2.rectangle(
+            frame,
+            (x1, y1 - text_height - 5),  # Top-left corner
+            (x1 + text_width, y1),  # Bottom-right corner
+            box_color,  # Green color
+            -1,  # Filled rectangle
+        )
+
+        # Draw text
+        cv2.putText(
+            frame,
+            label_text,
+            (x1, y1 - 5),  # Position slightly above box
+            text_params["fontFace"],
+            text_params["fontScale"],
+            text_color,  # Black text color
+            text_params["thickness"],
+        )
 
     def draw_boxes(self, frame, predictions, threshold=0.5):
         # frame = self.frame
@@ -90,28 +135,17 @@ class VideoLoop:
         # Draw bounding boxes and labels on the frame
         for i, box in enumerate(boxes):
             if scores[i] > threshold:
-                x1, y1, x2, y2 = box  # [int(x) for x in box]
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                label_text = f"{labels[i]}: {scores[i]:.2f}"
-                cv2.putText(
-                    frame,
-                    label_text,
-                    (x1 + 2, y1 + 12),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1,
-                    (255, 255, 255),
-                    2,
-                )
+                self._draw_box_with_label(frame, box, labels[i], scores[i])
         return frame
 
     def draw(self, frame):
-        cv2.imshow("Webcam Object Detection", frame)
+        cv2.imshow("Object Detection", frame)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             exit()
 
     def process(self, model):
         while True:
-            frame = self.capture()
+            frame = self.video_producer.capture()
 
             predictions = []
             # predictions = model.predict(model.preprocess(frame))
@@ -124,7 +158,7 @@ class VideoLoop:
         pred_frame_id = 0
         while True:
             frame_id += 1
-            frame = self.capture()
+            frame = self.video_producer.capture()
             frame_q.put((frame_id, frame))
 
             try:
@@ -180,7 +214,7 @@ def main():
     )
     args = parser.parse_args()
 
-    input_video = VideoProducer(camera_id=args.camera)
+    input_video = VideoOpenCV(camera_id=args.camera)
 
     # Classic
     det = Detector(device=args.device)
