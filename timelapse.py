@@ -11,7 +11,7 @@ import cv2
 import ffmpeg
 import numpy as np
 from joblib import Parallel, delayed
-from tqdm import tqdm
+import numpy as np 
 
 PIXEL_FORMAT = "bgr24"
 CRF_VALUE = 23  # Constant Rate Factor (0-51), lower is better, default: 23
@@ -36,7 +36,7 @@ class VideoStream:
         )
 
 
-def dynamic_range(frame: cv2.Mat) -> Dict[str, float]:
+def dynamic_range(frame: np.ndarray) -> Dict[str, float]:
     """
     Analyze the dynamic range in a frame.
 
@@ -84,10 +84,10 @@ def dynamic_range(frame: cv2.Mat) -> Dict[str, float]:
 
 
 def post_process(
-    frame: cv2.Mat,
+    frame: np.ndarray,
     features: Dict[str, float],
     green_threshold: float = 0.2,
-) -> cv2.Mat:
+) -> np.ndarray:
     if frame is None:
         return None
 
@@ -167,7 +167,7 @@ class Clip:
         )
         return VideoStream.from_metadata(hd_stream)
 
-    def read_frame_opencv(self) -> Optional[cv2.Mat]:
+    def read_frame_opencv(self) -> Optional[np.ndarray]:
         cap = cv2.VideoCapture(self.path.as_posix())
         # stream_index = self.get_hd_track()
         # print(f"Reading stream {stream_index}")
@@ -202,7 +202,7 @@ class Clip:
 
         return np.frombuffer(out, np.uint8).reshape([stream.height, stream.width, 3])
 
-    def read_frame(self) -> cv2.Mat:
+    def read_frame(self) -> np.ndarray:
         stream = self.best_video_stream(self.get_metadata())
         if not stream:
             return None
@@ -228,9 +228,9 @@ class Clip:
 
 
 class Timeline:
-    def __init__(self, video_path: Path):
-        self.video_path = video_path
-        self.clips = self.get_clips(video_path)
+    def __init__(self, clips_path: Path):
+        self.clips_path = clips_path
+        self.clips = self.get_clips(clips_path)
 
     def get_clips(self, video_path: Path) -> List[Clip]:
         files = [Clip.build(file) for file in video_path.glob("*/*.mp4")]
@@ -287,7 +287,7 @@ class Timeline:
             .run_async(pipe_stdin=True)
         )
 
-        def process(clip: Clip) -> cv2.Mat:
+        def process(clip: Clip) -> np.ndarray:
             frame = clip.read_frame()
             features = dynamic_range(frame)
             return post_process(
@@ -330,7 +330,7 @@ class VideoPlayer:
 
         cv2.destroyAllWindows()
 
-    def draw(self, frame: cv2.Mat):
+    def draw(self, frame: np.ndarray):
         if frame is None:
             return
         cv2.imshow("frame", frame)
@@ -381,7 +381,7 @@ class VideoPlayer:
         draw_frames(frame_queue)
 
     def show_joblib(self, clips: List[Clip], green_threshold: float = 0.2) -> None:
-        def process(clip: Clip) -> cv2.Mat:
+        def process(clip: Clip) -> np.ndarray:
             frame = clip.read_frame()
             features = dynamic_range(frame)
             return post_process(
@@ -400,6 +400,9 @@ def parse_datetime(date_str: str) -> Optional[datetime]:
         return None
     date_str = date_str.strip().strip("-")
     fmt = "%Y%m%d-%H%M%S"  # YYYYMMDD-HHMMSS format
+
+    if len(date_str) == 10:
+        date_str = date_str.replace("-", "")
 
     if len(date_str) == 8:
         date_str = f"{date_str}-000000"
@@ -427,7 +430,7 @@ def main():
         type=parse_datetime,
     )
     parser.add_argument(
-        "--day", help="Day to process in format YYYYMMDD", type=parse_datetime
+        "--day", help="Day to process in format YYYY-MM-DD", type=parse_datetime
     )
     parser.add_argument("--output", help="Output file", type=Path)
     parser.add_argument("--skip", help="Sample clips", type=int, default=1)
