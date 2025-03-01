@@ -1,4 +1,5 @@
 import argparse
+import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -11,11 +12,19 @@ import cv2
 import ffmpeg
 import numpy as np
 from joblib import Parallel, delayed
-import numpy as np 
+from numpy.typing import NDArray
 
 PIXEL_FORMAT = "bgr24"
 CRF_VALUE = 23  # Constant Rate Factor (0-51), lower is better, default: 23
 
+Image = NDArray[np.uint8]
+
+
+def is_graphical_environment():
+    """Detect if running in a graphical environment"""
+    if not os.environ.get('DISPLAY'):
+        return False
+    return True
 
 @dataclass
 class VideoStream:
@@ -36,7 +45,7 @@ class VideoStream:
         )
 
 
-def dynamic_range(frame: np.ndarray) -> Dict[str, float]:
+def dynamic_range(frame: Image) -> Dict[str, float]:
     """
     Analyze the dynamic range in a frame.
 
@@ -84,10 +93,10 @@ def dynamic_range(frame: np.ndarray) -> Dict[str, float]:
 
 
 def post_process(
-    frame: np.ndarray,
+    frame: Image,
     features: Dict[str, float],
     green_threshold: float = 0.2,
-) -> np.ndarray:
+) -> Image:
     if frame is None:
         return None
 
@@ -129,7 +138,7 @@ def post_process(
 class Clip:
     path: Path
     timestamp: datetime
-    metadata: Optional[dict] = None
+    metadata: Optional[Dict[str, float]] = None
 
     @staticmethod
     def timestamp_from_path(path: Path, is_utc: bool = True) -> datetime:
@@ -167,7 +176,7 @@ class Clip:
         )
         return VideoStream.from_metadata(hd_stream)
 
-    def read_frame_opencv(self) -> Optional[np.ndarray]:
+    def read_frame_opencv(self) -> Optional[Image]:
         cap = cv2.VideoCapture(self.path.as_posix())
         # stream_index = self.get_hd_track()
         # print(f"Reading stream {stream_index}")
@@ -202,7 +211,7 @@ class Clip:
 
         return np.frombuffer(out, np.uint8).reshape([stream.height, stream.width, 3])
 
-    def read_frame(self) -> np.ndarray:
+    def read_frame(self) -> Image:
         stream = self.best_video_stream(self.get_metadata())
         if not stream:
             return None
@@ -229,6 +238,7 @@ class Clip:
 
 class Timeline:
     def __init__(self, clips_path: Path):
+        self.has_display = is_graphical_environment()
         self.clips_path = clips_path
         self.clips = self.get_clips(clips_path)
 
@@ -287,7 +297,7 @@ class Timeline:
             .run_async(pipe_stdin=True)
         )
 
-        def process(clip: Clip) -> np.ndarray:
+        def process(clip: Clip) -> Image:
             frame = clip.read_frame()
             features = dynamic_range(frame)
             return post_process(
@@ -308,10 +318,12 @@ class Timeline:
                 # Write frames to video
                 for frame in batch_frames:
                     if frame is not None:
-                        cv2.imshow("frame", frame)
-                        if cv2.waitKey(1) & 0xFF == ord("q"):
-                            exit()
                         encoder.stdin.write(frame.tobytes())
+                        if self.has_display:
+                            cv2.imshow("frame", frame)
+                            if cv2.waitKey(1) & 0xFF == ord("q"):
+                                exit()
+                        
 
         finally:
             # Cleanup
@@ -330,7 +342,7 @@ class VideoPlayer:
 
         cv2.destroyAllWindows()
 
-    def draw(self, frame: np.ndarray):
+    def draw(self, frame: Image):
         if frame is None:
             return
         cv2.imshow("frame", frame)
@@ -381,7 +393,7 @@ class VideoPlayer:
         draw_frames(frame_queue)
 
     def show_joblib(self, clips: List[Clip], green_threshold: float = 0.2) -> None:
-        def process(clip: Clip) -> np.ndarray:
+        def process(clip: Clip) -> Image:
             frame = clip.read_frame()
             features = dynamic_range(frame)
             return post_process(
@@ -402,11 +414,13 @@ def parse_datetime(date_str: str) -> Optional[datetime]:
     fmt = "%Y%m%d-%H%M%S"  # YYYYMMDD-HHMMSS format
 
     if len(date_str) == 10:
+        # YYYY-MM-DD format
         date_str = date_str.replace("-", "")
-
     if len(date_str) == 8:
+        # YYYYMMDD format
         date_str = f"{date_str}-000000"
     if len(date_str) > 8 and len(date_str) < 15:
+        # Add missing seconds
         date_str = date_str.ljust(15, "0")
 
     dt = datetime.strptime(date_str, fmt)
