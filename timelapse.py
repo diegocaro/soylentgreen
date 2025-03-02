@@ -134,7 +134,7 @@ def post_process(
     return frame_copy
 
 
-@dataclass()
+@dataclass(frozen=True)
 class Clip:
     path: Path
     timestamp: datetime
@@ -151,10 +151,12 @@ class Clip:
             timestamp = timestamp_utc.astimezone()  # Convert to local timezone
         return timestamp
 
-    @staticmethod
-    def build(path: Path) -> "Clip":
-        timestamp = Clip.timestamp_from_path(path)
-        return Clip(path, timestamp)
+    @classmethod
+    def from_path(cls, path: Path, metadata: Optional[Dict[str, float]] = None) -> "Clip":
+        """Factory method that handles timestamp creation"""
+        timestamp = cls.timestamp_from_path(path)
+        return cls(path=path, timestamp=timestamp, metadata=metadata)
+
 
     def __str__(self) -> str:
         return f"{self.timestamp} - {self.path}"
@@ -243,7 +245,7 @@ class Timeline:
         self.clips = self.get_clips(clips_path)
 
     def get_clips(self, video_path: Path) -> List[Clip]:
-        files = [Clip.build(file) for file in video_path.glob("*/*.mp4")]
+        files = [Clip.from_path(file) for file in video_path.glob("*/*.mp4")]
         ans = sorted(files, key=lambda clip: clip.timestamp)
         return ans
 
