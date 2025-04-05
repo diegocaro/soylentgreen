@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from queue import Queue
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import cv2
 import ffmpeg
@@ -22,26 +22,30 @@ Image = NDArray[np.uint8]
 
 def is_graphical_environment():
     """Detect if running in a graphical environment"""
-    if not os.environ.get('DISPLAY'):
+    if not os.environ.get("DISPLAY"):
         return False
     return True
 
+
 @dataclass
-class VideoStream:
+class VideoStreamMetadata:
     width: int
     height: int
     stream_index: int
+    fps: float
 
     @property
     def dimensions(self) -> Tuple[int, int]:
         return (self.width, self.height)
 
     @classmethod
-    def from_metadata(cls, stream: Dict[str, Any]) -> "VideoStream":
+    def from_metadata(cls, stream: Dict[str, Any]) -> "VideoStreamMetadata":
         return cls(
             width=int(stream["width"]),
             height=int(stream["height"]),
             stream_index=int(stream["index"]),
+            fps=float(stream["avg_frame_rate"].split("/")[0])
+            / float(stream["avg_frame_rate"].split("/")[1]),
         )
 
 
@@ -152,11 +156,12 @@ class Clip:
         return timestamp
 
     @classmethod
-    def from_path(cls, path: Path, metadata: Optional[Dict[str, float]] = None) -> "Clip":
+    def from_path(
+        cls, path: Path, metadata: Optional[Dict[str, float]] = None
+    ) -> "Clip":
         """Factory method that handles timestamp creation"""
         timestamp = cls.timestamp_from_path(path)
         return cls(path=path, timestamp=timestamp, metadata=metadata)
-
 
     def __str__(self) -> str:
         return f"{self.timestamp} - {self.path}"
@@ -169,14 +174,14 @@ class Clip:
             print(f"Error probing {self.path}: {e}")
             return None
 
-    def best_video_stream(self, metadata: dict) -> Optional[VideoStream]:
+    def best_video_stream(self, metadata: dict) -> Optional[VideoStreamMetadata]:
         if not metadata:
             return None
         hd_stream = max(
             (s for s in metadata["streams"] if s["codec_type"] == "video"),
             key=lambda s: s["width"],
         )
-        return VideoStream.from_metadata(hd_stream)
+        return VideoStreamMetadata.from_metadata(hd_stream)
 
     def read_frame_opencv(self) -> Optional[Image]:
         cap = cv2.VideoCapture(self.path.as_posix())
@@ -194,7 +199,7 @@ class Clip:
         return frame
 
     def read_frame_ffmpeg_sync(self):
-        stream = self.best_video_stream(self.get_metadata())
+        stream = self.stream
         if not stream:
             return None
 
@@ -214,7 +219,7 @@ class Clip:
         return np.frombuffer(out, np.uint8).reshape([stream.height, stream.width, 3])
 
     def read_frame(self) -> Image:
-        stream = self.best_video_stream(self.get_metadata())
+        stream = self.stream
         if not stream:
             return None
 
@@ -236,6 +241,51 @@ class Clip:
         process.wait()
 
         return frame
+
+    @property
+    def stream(self) -> Optional[VideoStreamMetadata]:
+        return self.best_video_stream(self.get_metadata())
+
+    def frames(self, buffer_size=10) -> Iterator[Tuple[int, Image]]:
+        """
+        Generate frames from video with improved memory management.
+
+        Args:
+            buffer_size: Maximum number of frames to buffer
+
+        Returns:
+            Iterator yielding (frame_id, frame) tuples
+        """
+        stream = self.stream
+        if not stream:
+            return
+
+        process = (
+            ffmpeg.input(str(self.path))
+            .output("pipe:", format="rawvideo", pix_fmt="bgr24", loglevel="quiet")
+            .global_args("-map", f"0:{stream.stream_index}")
+            .run_async(pipe_stdout=True)
+        )
+
+        try:
+            frame_id = -1
+            bytes_per_frame = stream.width * stream.height * 3
+
+            while True:
+                frame_id += 1
+                in_bytes = process.stdout.read(bytes_per_frame)
+                if not in_bytes or len(in_bytes) < bytes_per_frame:
+                    break
+
+                frame = np.frombuffer(in_bytes, np.uint8).reshape(
+                    [stream.height, stream.width, 3]
+                )
+                yield (frame_id, frame)
+
+        finally:
+            # Ensure resources are properly cleaned up
+            process.stdout.close()
+            process.wait()
 
 
 class Timeline:
@@ -325,7 +375,6 @@ class Timeline:
                             cv2.imshow("frame", frame)
                             if cv2.waitKey(1) & 0xFF == ord("q"):
                                 exit()
-                        
 
         finally:
             # Cleanup

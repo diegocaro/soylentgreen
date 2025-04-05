@@ -85,34 +85,22 @@ class AqaraViewer:
                 except:
                     break
 
-            cap = cv2.VideoCapture(str(selected_clip.path))
+            meta = selected_clip.stream
+            self.text_box.value = (
+                f"{selected_clip.path} fps={meta.fps:.2f}, {meta.width}x{meta.height}"
+            )
 
-            fps = int(cap.get(cv2.CAP_PROP_FPS))
-            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            self.text_box.value = f"{selected_clip.path} fps={fps}, {width}x{height}"
+            for frame_id, frame in selected_clip.frames():
+                if not clip_q.empty():
+                    break  # New clip available, stop current playback
 
-            try:
-                frame_id = -1
-                while cap.isOpened():
-                    frame_id += 1
+                if frame_id % 60 == 0:
+                    _, jpeg = cv2.imencode(".jpg", frame)
+                    jpeg_bytes = jpeg.tobytes()
+                    self.img_widget.value = jpeg_bytes
+                    break
 
-                    if not clip_q.empty():
-                        break  # New clip available, stop current playback
-
-                    ret, frame = cap.read()
-                    if not ret:
-                        break
-
-                    if frame_id % 60 == 0:
-                        _, jpeg = cv2.imencode(".jpg", frame)
-                        jpeg_bytes = jpeg.tobytes()
-                        self.img_widget.value = jpeg_bytes
-                        break
-            finally:
-                cap.release()
-
-            # This will force to continue to the next clip
+            # This will force to continue to the next clip, very HACKY
             if self.selector_minutes.index + 1 < len(self.selector_minutes.options):
                 self.selector_minutes.index += 1
 
@@ -166,7 +154,7 @@ class AqaraViewer:
         )
 
 
-def create_aqara_viewer(videos_path: Path) -> AqaraViewer:
+def create_aqara_viewer(videos_path: Path | str) -> AqaraViewer:
     """
     Create and display an Aqara video viewer
 
@@ -176,6 +164,8 @@ def create_aqara_viewer(videos_path: Path) -> AqaraViewer:
     Returns:
         AqaraViewer: The viewer instance
     """
-    viewer = AqaraViewer(videos_path)
+    if isinstance(videos_path, str):
+        videos_path = Path(videos_path)
+    AqaraViewer(videos_path)
     display(viewer.render())
     return viewer
