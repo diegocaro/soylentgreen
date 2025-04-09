@@ -2,22 +2,20 @@ import argparse
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from queue import Queue
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import cv2
 import ffmpeg
 import numpy as np
 from joblib import Parallel, delayed
-from numpy.typing import NDArray
 
-PIXEL_FORMAT = "bgr24"
-CRF_VALUE = 23  # Constant Rate Factor (0-51), lower is better, default: 23
-
-Image = NDArray[np.uint8]
+import aqara_video.core.constants as c
+from aqara_video.core.clip import Clip
+from aqara_video.core.timeline import Timeline
+from aqara_video.core.types import Image
 
 
 def is_graphical_environment():
@@ -25,28 +23,6 @@ def is_graphical_environment():
     if not os.environ.get("DISPLAY"):
         return False
     return True
-
-
-@dataclass
-class VideoStreamMetadata:
-    width: int
-    height: int
-    stream_index: int
-    fps: float
-
-    @property
-    def dimensions(self) -> Tuple[int, int]:
-        return (self.width, self.height)
-
-    @classmethod
-    def from_metadata(cls, stream: Dict[str, Any]) -> "VideoStreamMetadata":
-        return cls(
-            width=int(stream["width"]),
-            height=int(stream["height"]),
-            stream_index=int(stream["index"]),
-            fps=float(stream["avg_frame_rate"].split("/")[0])
-            / float(stream["avg_frame_rate"].split("/")[1]),
-        )
 
 
 def dynamic_range(frame: Image) -> Dict[str, float]:
@@ -138,183 +114,7 @@ def post_process(
     return frame_copy
 
 
-@dataclass(frozen=True)
-class Clip:
-    path: Path
-    timestamp: datetime
-    metadata: Optional[Dict[str, float]] = None
-
-    @staticmethod
-    def timestamp_from_path(path: Path, is_utc: bool = True) -> datetime:
-        # 20250207/082900.mp4 -> 2025-02-07 08:29:00 UTC
-        hhmmss = path.stem
-        yyyymmdd = path.parent.stem
-        timestamp = datetime.strptime(f"{yyyymmdd}{hhmmss}", "%Y%m%d%H%M%S")
-        if is_utc:
-            timestamp_utc = timestamp.replace(tzinfo=timezone.utc)
-            timestamp = timestamp_utc.astimezone()  # Convert to local timezone
-        return timestamp
-
-    @classmethod
-    def from_path(
-        cls, path: Path, metadata: Optional[Dict[str, float]] = None
-    ) -> "Clip":
-        """Factory method that handles timestamp creation"""
-        timestamp = cls.timestamp_from_path(path)
-        return cls(path=path, timestamp=timestamp, metadata=metadata)
-
-    def __str__(self) -> str:
-        return f"{self.timestamp} - {self.path}"
-
-    def get_metadata(self) -> Optional[Dict[str, Any]]:
-        try:
-            probe = ffmpeg.probe(str(self.path))
-            return probe
-        except ffmpeg.Error as e:
-            print(f"Error probing {self.path}: {e}")
-            return None
-
-    def best_video_stream(self, metadata: dict) -> Optional[VideoStreamMetadata]:
-        if not metadata:
-            return None
-        hd_stream = max(
-            (s for s in metadata["streams"] if s["codec_type"] == "video"),
-            key=lambda s: s["width"],
-        )
-        return VideoStreamMetadata.from_metadata(hd_stream)
-
-    def read_frame_opencv(self) -> Optional[Image]:
-        cap = cv2.VideoCapture(self.path.as_posix())
-        # stream_index = self.get_hd_track()
-        # print(f"Reading stream {stream_index}")
-
-        # cap.set(cv.CAP_PROP_VIDEO_STREAM, stream_index)
-        frame = None
-        while cap.isOpened() and frame is None:
-            ret, frame = cap.read()
-            if not ret:
-                print("Can't receive frame (stream end?).")
-                break
-        cap.release()
-        return frame
-
-    def read_frame_ffmpeg_sync(self):
-        stream = self.stream
-        if not stream:
-            return None
-
-        out, _ = (
-            ffmpeg.input(str(self.path))
-            .output(
-                "pipe:",
-                format="rawvideo",
-                pix_fmt=PIXEL_FORMAT,
-                vframes=1,
-                loglevel="quiet",
-            )
-            .global_args("-map", f"0:{stream.stream_index}")
-            .run()
-        )
-
-        return np.frombuffer(out, np.uint8).reshape([stream.height, stream.width, 3])
-
-    def read_frame(self) -> Image:
-        stream = self.stream
-        if not stream:
-            return None
-
-        process = (
-            ffmpeg.input(str(self.path))
-            .output(
-                "pipe:", format="rawvideo", pix_fmt="bgr24", vframes=1, loglevel="quiet"
-            )
-            .global_args("-map", f"0:{stream.stream_index}")
-            .run_async(pipe_stdout=True)
-        )
-
-        in_bytes = process.stdout.read(stream.width * stream.height * 3)
-        frame = np.frombuffer(in_bytes, np.uint8).reshape(
-            [stream.height, stream.width, 3]
-        )
-
-        process.stdout.close()
-        process.wait()
-
-        return frame
-
-    @property
-    def stream(self) -> Optional[VideoStreamMetadata]:
-        return self.best_video_stream(self.get_metadata())
-
-    def frames(self, buffer_size=10) -> Iterator[Tuple[int, Image]]:
-        """
-        Generate frames from video with improved memory management.
-
-        Args:
-            buffer_size: Maximum number of frames to buffer
-
-        Returns:
-            Iterator yielding (frame_id, frame) tuples
-        """
-        stream = self.stream
-        if not stream:
-            return
-
-        process = (
-            ffmpeg.input(str(self.path))
-            .output("pipe:", format="rawvideo", pix_fmt="bgr24", loglevel="quiet")
-            .global_args("-map", f"0:{stream.stream_index}")
-            .run_async(pipe_stdout=True)
-        )
-
-        try:
-            frame_id = -1
-            bytes_per_frame = stream.width * stream.height * 3
-
-            while True:
-                frame_id += 1
-                in_bytes = process.stdout.read(bytes_per_frame)
-                if not in_bytes or len(in_bytes) < bytes_per_frame:
-                    break
-
-                frame = np.frombuffer(in_bytes, np.uint8).reshape(
-                    [stream.height, stream.width, 3]
-                )
-                yield (frame_id, frame)
-
-        finally:
-            # Ensure resources are properly cleaned up
-            process.stdout.close()
-            process.wait()
-
-
-class Timeline:
-    def __init__(self, clips_path: Path):
-        self.has_display = is_graphical_environment()
-        self.clips_path = clips_path
-        self.clips = self.get_clips(clips_path)
-
-    def get_clips(self, video_path: Path) -> List[Clip]:
-        files = [Clip.from_path(file) for file in video_path.glob("*/*.mp4")]
-        ans = sorted(files, key=lambda clip: clip.timestamp)
-        return ans
-
-    def __str__(self) -> str:
-        return "\n".join(str(clip) for clip in self.clips)
-
-    def search_clips(
-        self, date_from: Optional[datetime] = None, date_to: Optional[datetime] = None
-    ) -> List[Clip]:
-
-        # Should improve this!!!! although the N is pretty small
-        clips: List[Clip] = []
-        for clip in self.clips:
-            if date_from and clip.timestamp < date_from:
-                continue
-            if date_to and clip.timestamp > date_to:
-                continue
-            clips.append(clip)
-        return clips
+class Timelapse:
 
     def create_timelapse(
         self,
@@ -334,7 +134,7 @@ class Timeline:
             ffmpeg.input(
                 "pipe:",
                 format="rawvideo",
-                pix_fmt=PIXEL_FORMAT,
+                pix_fmt=c.PIXEL_FORMAT,
                 s=f"{width}x{height}",
                 framerate=30,
             )
@@ -342,7 +142,7 @@ class Timeline:
                 str(output),
                 pix_fmt="yuv420p",
                 vcodec="libx264",
-                crf=CRF_VALUE,
+                crf=c.CRF_VALUE,
                 loglevel="quiet",
             )
             .overwrite_output()
@@ -517,8 +317,9 @@ def main():
     filtered_clips = clips[:: args.skip]
     print(f"Using {len(filtered_clips)} clips")
 
+    timelapse = Timelapse()
     if args.output:
-        timeline.create_timelapse(
+        timelapse.create_timelapse(
             args.output, filtered_clips, green_threshold=args.green_threshold
         )
     else:
