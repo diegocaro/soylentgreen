@@ -19,6 +19,32 @@ SoylentGreen is a Python package that provides tools to work with surveillance c
 - Apply intelligent filtering based on color analysis
 - Organize and manage video clips from multiple cameras
 
+## File Storage Structure
+
+Aqara security cameras save video files in a structured directory format:
+
+```
+/path/to/aqara_video/[camera_id]/[YYYYMMDD]/[HHMMSS].mp4
+```
+
+Where:
+- **camera_id**: A unique identifier for each camera with format `lumi1.[alphanumeric_string]` (e.g., `lumi1.54ef44457bc9`)
+- **YYYYMMDD**: Date folder organized by year, month, and day (e.g., `20250207` for February 7, 2025)
+- **HHMMSS**: Time-based filename with hours, minutes, and seconds (e.g., `082900.mp4` for 8:29:00 AM)
+
+### NAS Integration via Samba
+
+You can configure Aqara cameras to save footage directly to a NAS through the iOS/Android Aqara app. Once configured, you can store and access Aqara camera footage on a Network Attached Storage (NAS) using Samba shares:
+
+- **Centralized Storage**: All cameras can store footage in one location
+- **Easy Access**: Videos can be accessed from any computer on the network
+- **Preservation**: Original file organization is maintained
+
+For example, if your NAS is mounted at `/mnt/cameras/`, a complete video path might look like:
+```
+/mnt/cameras/aqara_video/lumi1.54ef44457bc9/20250301/185800.mp4
+```
+
 ## Installation
 
 This project uses Poetry for dependency management. To install:
@@ -53,7 +79,7 @@ timelapse /path/to/aqara_video/lumi1.54ef44457bc9 --output output.mp4
 timelapse /path/to/aqara_video/lumi1.54ef44457bc9 --date-from 20250301-000000 --date-to 20250301-235959 --output output.mp4
 
 # Timelapse for a specific day with green filtering (for plants/gardens)
-timelapse /path/to/camera/aqara_video/lumi1.54ef44457bc9 --day 20250301 --green-threshold 0.3 --output output.mp4
+timelapse /path/to/aqara_video/lumi1.54ef44457bc9 --day 20250301 --green-threshold 0.3 --output output.mp4
 ```
 
 ### Using in Jupyter Notebooks
@@ -63,7 +89,7 @@ The JupyterViewer widget shows a list of videos recorded per day.
 from aqara_video.viewers.jupyter_viewer import JupyterViewer
 
 # Create and display a viewer for browsing camera footage
-viewer = JupyterViewer.create_from_path("/path/to/camera/directory")
+viewer = JupyterViewer.create_from_path("/path/to/aqara_video/lumi1.54ef44457bc9")
 ```
 ![JupyterViewer widget](assets/jupyter_viewer.png)
 
