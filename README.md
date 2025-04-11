@@ -4,9 +4,9 @@ Tools for creating timelapse videos from surveillance footage, with a focus on A
 
 (or how Dani and I discovered that a plant can be killed by the sun)
 
-![Lavanda killed by the sun](assets/lavanda-480p.mp4)
+![Lavanda killed by the sun](assets/lavanda.gif)
 
-![Wheatgrass growing up! - some mold spotted](assets/pasto-480p.mp4)
+![Wheatgrass growing up! - some mold spotted](assets/pasto.gif)
 
 
 ## Overview
