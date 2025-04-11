@@ -1,15 +1,11 @@
 import json
-import os
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Tuple
-from unittest.mock import MagicMock, Mock, patch
+from typing import Any, Dict, List
+from unittest.mock import Mock, patch
 
-import ffmpeg
 import numpy as np
 import pytest
-from pytest import MonkeyPatch
 
-from aqara_video.core.types import Image
 from aqara_video.core.video_reader import (
     Format,
     VideoMetadata,

@@ -1,7 +1,3 @@
-from datetime import datetime, timezone
-
-import pytest
-
 from aqara_video.cli.timelapse import parse_datetime
 
 
