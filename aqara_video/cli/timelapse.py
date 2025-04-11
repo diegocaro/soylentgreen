@@ -8,14 +8,13 @@ from queue import Queue
 from typing import Dict, List, Optional
 
 import cv2
-import ffmpeg
 import numpy as np
 from joblib import Parallel, delayed
 
-import aqara_video.core.constants as c
 from aqara_video.core.clip import Clip
 from aqara_video.core.factory import TimelineFactory
 from aqara_video.core.types import Image
+from aqara_video.core.video_writer import VideoWriter
 
 
 def is_graphical_environment():
@@ -131,28 +130,10 @@ class Timelapse:
         batch_size = 100
 
         # Get dimensions from first clip
-        first_frame = clips[0].read_frame()
-        height, width = first_frame.shape[:2]
+        clip = clips[0]
 
-        # Setup ffmpeg process
-        encoder = (
-            ffmpeg.input(
-                "pipe:",
-                format="rawvideo",
-                pix_fmt=c.PIXEL_FORMAT,
-                s=f"{width}x{height}",
-                framerate=30,
-            )
-            .output(
-                str(output),
-                pix_fmt="yuv420p",
-                vcodec="libx264",
-                crf=c.CRF_VALUE,
-                loglevel="quiet",
-            )
-            .overwrite_output()
-            .run_async(pipe_stdin=True)
-        )
+        # Setup the video writer
+        writer = VideoWriter(output, clip.width, clip.height)
 
         def process(clip: Clip) -> Image:
             frame = clip.read_frame()
@@ -162,6 +143,7 @@ class Timelapse:
             )
 
         try:
+            writer.open()
             for i in range(0, len(clips), batch_size):
                 batch = clips[i : i + batch_size]
                 print(
@@ -175,7 +157,7 @@ class Timelapse:
                 # Write frames to video
                 for frame in batch_frames:
                     if frame is not None:
-                        encoder.stdin.write(frame.tobytes())
+                        writer.write_frame(frame)
                         if self.has_display:
                             cv2.imshow("frame", frame)
                             if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -183,8 +165,7 @@ class Timelapse:
 
         finally:
             # Cleanup
-            encoder.stdin.close()
-            encoder.wait()
+            writer.close()
 
 
 class VideoPlayer:
