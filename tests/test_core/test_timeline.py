@@ -1,10 +1,9 @@
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List
-from unittest.mock import Mock, patch
+from typing import Any, Dict
+from unittest.mock import Mock
 
 import pytest
-from pytest import MonkeyPatch
 
 from aqara_video.core.clip import Clip
 from aqara_video.core.provider import CameraProvider
