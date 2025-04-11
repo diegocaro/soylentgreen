@@ -16,7 +16,7 @@ MAPPING_CAMERAS = {
 }
 
 
-class AqaraViewer:
+class JupyterViewer:
     def __init__(
         self, videos_path: Path, cameras_names: Optional[Dict[str, str]] = None
     ):
@@ -86,10 +86,7 @@ class AqaraViewer:
                 except:
                     break
 
-            meta = selected_clip.stream
-            self.text_box.value = (
-                f"{selected_clip.path} fps={meta.fps:.2f}, {meta.width}x{meta.height}"
-            )
+            self.text_box.value = f"{selected_clip.path} fps={selected_clip.fps:.2f}, {selected_clip.width}x{selected_clip.height}"
 
             for frame_id, frame in selected_clip.frames():
                 if not clip_q.empty():
@@ -154,19 +151,19 @@ class AqaraViewer:
             ]
         )
 
+    @classmethod
+    def create_from_path(cls, videos_path: Path | str) -> "JupyterViewer":
+        """
+        Create and display an Aqara video viewer
 
-def create_aqara_viewer(videos_path: Path | str) -> AqaraViewer:
-    """
-    Create and display an Aqara video viewer
+        Args:
+            videos_path (str): Path to the directory containing video files
 
-    Args:
-        videos_path (str): Path to the directory containing video files
-
-    Returns:
-        AqaraViewer: The viewer instance
-    """
-    if isinstance(videos_path, str):
-        videos_path = Path(videos_path)
-    AqaraViewer(videos_path)
-    display(viewer.render())
-    return viewer
+        Returns:
+            AqaraViewer: The viewer instance
+        """
+        if isinstance(videos_path, str):
+            videos_path = Path(videos_path)
+        viewer = JupyterViewer(videos_path)
+        display(viewer.render())
+        return viewer

@@ -25,10 +25,22 @@ class Clip:
     def metadata(self) -> VideoMetadata:
         return self._reader.metadata
 
+    @property
+    def fps(self) -> float:
+        return self._reader.fps
+
+    @property
+    def width(self) -> int:
+        return self._reader.width
+
+    @property
+    def height(self) -> int:
+        return self._reader.height
+
     def read_frame(self) -> Image:
         return self._reader.read_frame()
 
-    def frames(self, buffer_size: int = 10) -> Iterator[Tuple[int, Image]]:
+    def frames(self, buffer_size: int = 1) -> Iterator[Tuple[int, Image]]:
         """
         Generate frames from video clip.
 
