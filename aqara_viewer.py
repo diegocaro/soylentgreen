@@ -7,7 +7,8 @@ import cv2
 from IPython.display import display
 from ipywidgets import Dropdown, HBox, Image, Layout, SelectionSlider, Text, VBox
 
-from timelapse import Clip, Timeline
+from aqara_video.core.clip import Clip
+from aqara_video.core.factory import TimelineFactory
 
 MAPPING_CAMERAS = {
     "lumi1.54ef44457bc9": "Pasto",
@@ -106,7 +107,7 @@ class AqaraViewer:
 
     def update_days(self, *args):
         """Update the days dropdown based on camera selection"""
-        self.clips = Timeline(self.dropdown_cameras.value).clips
+        self.clips = TimelineFactory.create_timeline(self.dropdown_cameras.value).clips
 
         days = sorted(list(set(c.timestamp.date() for c in self.clips)))
         self.dropdown_days.options = days

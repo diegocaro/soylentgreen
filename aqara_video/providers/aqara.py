@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
-from ..core.clip import Clip, ClipMetadata
+from ..core.clip import Clip
 from ..core.provider import CameraProvider
 
 AQARA_PREFIX_DIR = "lumi1."
@@ -28,13 +28,11 @@ class AqaraProvider(CameraProvider):
         files = [self.create_clip(file) for file in path.glob("*/*.mp4")]
         return sorted(files, key=lambda clip: clip.timestamp)
 
-    def create_clip(self, path: Path, metadata: Optional[ClipMetadata] = None) -> Clip:
+    def create_clip(self, path: Path) -> Clip:
         """Create an Aqara clip from a file path."""
         timestamp = self.extract_timestamp(path)
         camera_id = self._extract_camera_id_from_path(path)
-        return Clip(
-            camera_id=camera_id, path=path, timestamp=timestamp, metadata=metadata
-        )
+        return Clip(camera_id=camera_id, path=path, timestamp=timestamp)
 
     def extract_timestamp(self, path: Path) -> datetime:
         """Extract timestamp from Aqara path format."""

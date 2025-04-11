@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
-from .clip import Clip, ClipMetadata
+from .clip import Clip
 
 
 class CameraProvider(ABC):
@@ -25,7 +25,7 @@ class CameraProvider(ABC):
         pass
 
     @abstractmethod
-    def create_clip(self, path: Path, metadata: Optional[ClipMetadata] = None) -> Clip:
+    def create_clip(self, path: Path) -> Clip:
         """Create a clip from a file path."""
         pass
 

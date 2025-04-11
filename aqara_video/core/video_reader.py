@@ -2,12 +2,12 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import ffmpeg
 import numpy as np
 
-from aqara_video.core.types import Image
+from .types import Image
 
 
 @dataclass(frozen=True)
@@ -47,24 +47,8 @@ class VideoStream:
     bits_per_raw_sample: str
     nb_frames: str
     extradata_size: int
-    disposition: Optional[Dict[str, int]] = None
-    tags: Optional[Dict[str, str]] = None
-
-    @classmethod
-    def from_dict(cls, data: Dict) -> "VideoStream":
-        """Create a VideoStream instance from a dictionary."""
-        # Extract disposition and tags first
-        disposition_data = data.pop("disposition", {})
-        tags_data = data.pop("tags", {})
-
-        # Create the main stream object with remaining data
-        stream = cls(
-            **{k: v for k, v in data.items() if k not in ("disposition", "tags")},
-            disposition=disposition_data,
-            tags=tags_data,
-        )
-
-        return stream
+    disposition: Dict[str, int]
+    tags: Dict[str, str]
 
 
 @dataclass
@@ -82,16 +66,7 @@ class Format:
     size: str
     bit_rate: str
     probe_score: int
-    tags: Optional[Dict[str, str]] = None
-
-    @classmethod
-    def from_dict(cls, data: Dict) -> "Format":
-        """Create a Format instance from a dictionary."""
-        tags_data = data.pop("tags", {})
-        format_obj = cls(
-            **{k: v for k, v in data.items() if k != "tags"}, tags=tags_data
-        )
-        return format_obj
+    tags: Dict[str, str]
 
 
 @dataclass
@@ -102,13 +77,13 @@ class VideoMetadata:
     format: Format
 
     @classmethod
-    def from_dict(cls, data: Dict) -> "VideoMetadata":
+    def from_dict(cls, data: dict[str, Any]) -> "VideoMetadata":
         """Create a VideoMetadata instance from a dictionary."""
-        streams = [VideoStream.from_dict(stream) for stream in data.get("streams", [])]
-        format_data = Format.from_dict(data.get("format", {}))
+        streams = [VideoStream(**stream) for stream in data.get("streams", [])]
+        format_data = Format(**data.get("format", {}))
         return cls(streams=streams, format=format_data)
 
-    def get_best_video_stream(self) -> VideoStream:
+    def get_best_stream(self) -> VideoStream:
         """Returns the video stream with the highest resolution."""
         video_streams = [s for s in self.streams if s.codec_type == "video"]
         if not video_streams:
@@ -116,7 +91,7 @@ class VideoMetadata:
         return max(video_streams, key=lambda s: s.width * s.height)
 
 
-class FFmpegReader:
+class VideoReader:
     """
     Video reader class using ffmpeg for decoding.
 
@@ -132,44 +107,44 @@ class FFmpegReader:
             clip: Either a Clip object or a path to a video file
         """
         self.path = path
-        self._probe_result: Optional[VideoMetadata] = None
+        self._metadata: Optional[VideoMetadata] = None
 
     @property
-    def probe(self) -> VideoMetadata:
+    def metadata(self) -> VideoMetadata:
         """
         Get video metadata using ffprobe.
 
         Returns:
             A dictionary containing video metadata
         """
-        if self._probe_result is None:
-            self._probe_result = VideoMetadata.from_dict(ffmpeg.probe(str(self.path)))
-        return self._probe_result
+        if self._metadata is None:
+            self._metadata = VideoMetadata.from_dict(ffmpeg.probe(str(self.path)))  # type: ignore
+        return self._metadata
 
     @property
-    def best_video_stream(self) -> VideoStream:
+    def best_stream(self) -> VideoStream:
         """
         Get the best video stream from the metadata.
 
         Returns:
             A VideoStream object representing the best video stream
         """
-        return self.probe.get_best_video_stream()
+        return self.metadata.get_best_stream()
 
     @property
     def width(self) -> int:
         """Get video width."""
-        return self.best_video_stream.width
+        return self.best_stream.width
 
     @property
     def height(self) -> int:
         """Get video height."""
-        return self.best_video_stream.height
+        return self.best_stream.height
 
     @property
     def fps(self) -> float:
         """Get video frames per second."""
-        fps_str = self.best_video_stream.avg_frame_rate
+        fps_str = self.best_stream.avg_frame_rate
         if "/" in fps_str:
             num, den = map(int, fps_str.split("/"))
             return num / den if den else 0
@@ -178,7 +153,7 @@ class FFmpegReader:
     @property
     def duration(self) -> float:
         """Get video duration in seconds."""
-        return float(self.probe.format.duration)
+        return float(self.metadata.format.duration)
 
     @property
     def frame_count(self) -> int:
@@ -187,28 +162,105 @@ class FFmpegReader:
 
         Calculates based on duration and FPS if not available directly.
         """
-        return int(self.best_video_stream.nb_frames)
+        return int(self.best_stream.nb_frames)
 
-    def read_frame(self) -> Image:
-        stream = self.best_video_stream
+    def read_frame(
+        self, stream_index: Optional[int] = None, do_async: bool = False
+    ) -> Image:
+        """
+        Read the first frame from the video using synchronous ffmpeg.
+
+        Returns:
+            A numpy array containing the frame data in BGR format
+        """
+        stream = self.best_stream
+        if stream_index is None:
+            stream = self.metadata.streams[stream.index]
+
+        if do_async:
+            frame = self._read_frame_async(stream)
+        else:
+            frame = self._read_frame_sync(stream)
+        return frame
+
+    def _bytes_to_frame(self, in_bytes: bytes, stream: VideoStream) -> Image:
+        """Convert bytes to a numpy array representing the frame."""
+        return np.frombuffer(in_bytes, np.uint8).reshape(stream.height, stream.width, 3)
+
+    def _read_frame_sync(self, stream: VideoStream) -> Image:
+        out, _ = (  # type: ignore
+            ffmpeg.input(str(self.path))  # type: ignore
+            .output("pipe:", format="rawvideo", pix_fmt="bgr24", vframes=1)
+            .global_args("-map", f"0:{stream.index}")
+            .run(capture_stdout=True, quiet=True)
+        )
+        frame = self._bytes_to_frame(out, stream)
+
+        return frame
+
+    def _read_frame_async(self, stream: VideoStream) -> Image:
+        # Note: this is not really async as we are waiting for the process to finish
+        # process = (  # type: ignore
+        #     ffmpeg.input(str(self.path))  # type: ignore
+        #     .output(
+        #         "pipe:", format="rawvideo", pix_fmt="bgr24", vframes=1, loglevel="quiet"
+        #     )
+        #     .global_args("-map", f"0:{stream.index}")
+        #     .run_async(pipe_stdout=True, quiet=True)
+        # )
+        # in_bytes = process.stdout.read(self.width * self.height * 3)
+        # frame = self._byte_to_frame(in_bytes, stream)
+        # process.stdout.close()
+        # process.wait()
+        # return frame
+        raise NotImplementedError(
+            "Async reading is not implemented yet. Use synchronous reading instead."
+        )
+
+    def frames(
+        self, stream_index: Optional[int] = None, buffer_size: int = 1
+    ) -> Iterator[Tuple[int, Image]]:
+        """
+        Generate frames from video with improved memory management.
+
+        Args:
+            buffer_size: Maximum number of frames to buffer
+
+        Returns:
+            Iterator yielding (frame_id, frame) tuples
+        """
+
+        if buffer_size > 1:
+            raise NotImplementedError("Buffering not implemented yet.")
+
+        stream = self.best_stream
+        if stream_index is None:
+            stream = self.metadata.streams[stream.index]
+
         process = (
             ffmpeg.input(str(self.path))
-            .output(
-                "pipe:", format="rawvideo", pix_fmt="bgr24", vframes=1, loglevel="quiet"
-            )
+            .output("pipe:", format="rawvideo", pix_fmt="bgr24", loglevel="quiet")
             .global_args("-map", f"0:{stream.index}")
             .run_async(pipe_stdout=True)
         )
 
-        in_bytes = process.stdout.read(stream.width * stream.height * 3)
-        frame = np.frombuffer(in_bytes, np.uint8).reshape(
-            [stream.height, stream.width, 3]
-        )
+        try:
+            frame_id = -1
+            bytes_per_frame = stream.width * stream.height * 3
 
-        process.stdout.close()
-        process.wait()
+            while True:
+                frame_id += 1
+                in_bytes = process.stdout.read(bytes_per_frame)
+                if not in_bytes or len(in_bytes) < bytes_per_frame:
+                    break
 
-        return frame
+                frame = self._bytes_to_frame(in_bytes, stream)
+                yield (frame_id, frame)
+
+        finally:
+            # Ensure resources are properly cleaned up
+            process.stdout.close()
+            process.wait()
 
     # def read_frame_at_time(self, time_sec: float) -> np.ndarray:
     #     """

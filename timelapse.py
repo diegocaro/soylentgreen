@@ -14,6 +14,7 @@ from joblib import Parallel, delayed
 
 import aqara_video.core.constants as c
 from aqara_video.core.clip import Clip
+from aqara_video.core.factory import TimelineFactory
 from aqara_video.core.timeline import Timeline
 from aqara_video.core.types import Image
 
@@ -115,6 +116,11 @@ def post_process(
 
 
 class Timelapse:
+    def __init__(self):
+        self.has_display = is_graphical_environment()
+        if self.has_display:
+            cv2.namedWindow("frame", cv2.WINDOW_NORMAL)
+            cv2.resizeWindow("frame", 640, 480)
 
     def create_timelapse(
         self,
@@ -304,9 +310,7 @@ def main():
     )
     args = parser.parse_args()
 
-    # video_path = "/Volumes/Cameras/aqara_video/lumi1.54ef44457bc9"
-    timeline = Timeline(Path(args.source))
-    # print(timeline)
+    timeline = TimelineFactory.create_timeline(Path(args.source))
     if args.day:
         date_from = args.day.replace(hour=0, minute=0, second=0)
         date_to = args.day.replace(hour=23, minute=59, second=59)

@@ -30,6 +30,10 @@ class TimelineFactory:
     def create_timeline(cls, clips_path: Path) -> Timeline:
         """Create a timeline with the appropriate provider for the given path."""
 
+        if not clips_path.exists():
+            raise TimelineError(f"Directory does not exist: {clips_path}")
+        if not clips_path.is_dir():
+            raise TimelineError(f"Invalid directory: {clips_path}")
         for provider in cls.PROVIDERS:
             if provider.validate_directory(clips_path):
                 return Timeline(clips_path, provider)
