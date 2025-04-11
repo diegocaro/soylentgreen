@@ -25,7 +25,7 @@ This project uses Poetry for dependency management. To install:
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/diegocaro/soylentgreen.git
 cd soylentgreen
 
 # Install with Poetry
@@ -39,6 +39,7 @@ poetry install
 - FFmpeg
 - NumPy
 - Joblib
+- Pytest
 
 ## Usage
 
