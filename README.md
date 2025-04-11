@@ -2,7 +2,7 @@
 
 Tools for creating timelapse videos from surveillance footage, with a focus on Aqara security cameras.
 
-(or how Dani and I discovered that a plant can be killed by the sun)
+(or how we discovered that a plant can be killed by the sun)
 
 ![Lavanda killed by the sun](assets/lavanda.gif)
 
