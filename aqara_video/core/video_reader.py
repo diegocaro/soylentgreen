@@ -10,8 +10,16 @@ import numpy as np
 from .types import Image
 
 
+class Stream:
+    pass
+
+
+class AudioStream(Stream):
+    pass
+
+
 @dataclass(frozen=True)
-class VideoStream:
+class VideoStream(Stream):
     """Represents a video stream from ffprobe metadata."""
 
     index: int
@@ -50,6 +58,11 @@ class VideoStream:
     disposition: Dict[str, int]
     tags: Dict[str, str]
 
+    def __post_init__(self) -> None:
+        assert (
+            self.codec_type == "video"
+        ), f"Expected codec_type 'video', got {self.codec_type}"
+
 
 @dataclass
 class Format:
@@ -79,7 +92,11 @@ class VideoMetadata:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "VideoMetadata":
         """Create a VideoMetadata instance from a dictionary."""
-        streams = [VideoStream(**stream) for stream in data.get("streams", [])]
+        streams = [
+            VideoStream(**stream)
+            for stream in data.get("streams", [])
+            if stream.get("codec_type") == "video"
+        ]
         format_data = Format(**data.get("format", {}))
         return cls(streams=streams, format=format_data)
 

@@ -9,6 +9,10 @@ Tools for creating timelapse videos from surveillance footage, with a focus on A
 ![Wheatgrass growing up! - some mold spotted](assets/pasto.gif)
 
 
+## Goal (for me)
+
+Learn about computational vision and machine learning.
+
 ## Overview
 
 SoylentGreen is a Python package that provides tools to work with surveillance camera footage, particularly from Aqara security cameras. It allows you to:
@@ -17,7 +21,8 @@ SoylentGreen is a Python package that provides tools to work with surveillance c
 - View videos within Jupyter notebooks
 - Process and analyze video frames
 - Apply intelligent filtering based on color analysis
-- Organize and manage video clips from multiple cameras
+- Run and train machine learning algorithms
+
 
 ## File Storage Structure
 
@@ -34,11 +39,7 @@ Where:
 
 ### NAS Integration via Samba
 
-You can configure Aqara cameras to save footage directly to a NAS through the iOS/Android Aqara app. Once configured, you can store and access Aqara camera footage on a Network Attached Storage (NAS) using Samba shares:
-
-- **Centralized Storage**: All cameras can store footage in one location
-- **Easy Access**: Videos can be accessed from any computer on the network
-- **Preservation**: Original file organization is maintained
+You can configure Aqara cameras to save footage directly to a NAS through the iOS/Android Aqara app. Once configured, you can store and access Aqara camera footage on a Network Attached Storage (NAS) using Samba shares.
 
 For example, if your NAS is mounted at `/mnt/cameras/`, a complete video path might look like:
 ```

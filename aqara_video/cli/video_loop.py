@@ -1,52 +1,11 @@
 import argparse
 import threading
 from abc import ABC, abstractmethod
-from pathlib import Path
 from queue import Queue
 
 import cv2
-import torch
-from PIL import Image
-from torchvision import models, transforms
 
-
-class Detector:
-    def __init__(self, device: str = "cpu"):
-        weights = models.detection.FasterRCNN_MobileNet_V3_Large_320_FPN_Weights.DEFAULT
-        self.labels = list(weights.meta["categories"])
-
-        self.device = torch.device(device)
-        self.model = models.detection.fasterrcnn_mobilenet_v3_large_320_fpn(
-            weights=weights
-        )
-        self.model.to(self.device)
-        self.model.eval()
-
-    def transform(self):
-        ret = transforms.Compose(
-            [
-                transforms.ToTensor(),  # Convert the image to a tensor
-            ]
-        )
-        return ret
-
-    def preprocess(self, cv_image):
-        pil_image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
-        image_tensor = self.transform()(pil_image).to(self.device)
-        return image_tensor
-
-    def predict(self, image_tensor):
-        def tensor_to_list(pred):
-            ans = {k: v.tolist() for k, v in pred.items()}
-            ans["categories"] = [self.labels[i] for i in ans["labels"]]
-            map_int = lambda x: [int(z) for z in x]
-            ans["boxes"] = [map_int(box) for box in ans["boxes"]]
-            return ans
-
-        with torch.no_grad():
-            predictions = self.model([image_tensor])
-            ans = [tensor_to_list(x) for x in predictions]
-            return ans
+from aqara_video.ml.detector import Detector
 
 
 class VideoAbstract(ABC):
