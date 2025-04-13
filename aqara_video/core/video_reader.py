@@ -257,7 +257,6 @@ class VideoReader:
 
     def frames(
         self,
-        start_time: float = 0.0,
         stream_index: Optional[int] = None,
         buffer_size: int = 1,
     ) -> Iterator[VideoFrame]:
@@ -265,7 +264,6 @@ class VideoReader:
         Generate frames from video with improved memory management.
 
         Args:
-            start_time: Optional start time in seconds (default: 0)
             stream_index: Optional index of the stream to use
             buffer_size: Maximum number of frames to buffer
 
@@ -275,19 +273,12 @@ class VideoReader:
         if buffer_size > 1:
             raise NotImplementedError("Buffering not implemented yet.")
 
-        if start_time < 0 or start_time >= self.duration:
-            raise ValueError(f"Start time {start_time} is outside video duration")
-
         stream = self.best_stream
         if stream_index is not None:
             stream = self.metadata.streams[stream_index]
 
-        input_args = {}
-        if start_time > 0:
-            input_args["ss"] = start_time
-
         process = (
-            ffmpeg.input(str(self.path), **input_args)
+            ffmpeg.input(str(self.path))
             .output("pipe:", format="rawvideo", pix_fmt="bgr24", loglevel="quiet")
             .global_args("-map", f"0:{stream.index}")
             .run_async(pipe_stdout=True)
@@ -328,6 +319,9 @@ class VideoReader:
         Returns:
             Iterator yielding Frame objects with accurate timestamps
         """
+        raise NotImplementedError(
+            "Precise timestamp reading is not implemented yet. Use basic reading instead."
+        )
         if buffer_size > 1:
             raise NotImplementedError("Buffering not implemented yet.")
 
@@ -366,7 +360,7 @@ class VideoReader:
                 decoded_line = line.decode("utf-8", errors="replace").strip()
 
                 # Try to extract frame ID and timestamp from showinfo
-                timestamp_info = self._parse_showinfo_timestamp(decoded_line)
+                timestamp_info = _parse_showinfo_timestamp(decoded_line)
                 if timestamp_info:
                     timestamps_queue.put(timestamp_info)
 
