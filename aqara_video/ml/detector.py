@@ -1,10 +1,11 @@
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple
 
 import cv2
 import torch
 from torchvision import models, transforms
 
 from aqara_video.core.types import Image
+from aqara_video.ml.utils import Prediction, to_predictions
 
 
 class Detector:
@@ -83,7 +84,7 @@ class Detector:
             tensors.append(tensor)
         return tensors
 
-    def predict(self, image_tensor: torch.Tensor) -> List[Dict[str, Any]]:
+    def predict(self, image_tensor: torch.Tensor) -> List[Prediction]:
         """
         Make object detection predictions on a single preprocessed image tensor.
         Legacy method for backward compatibility.
@@ -103,19 +104,7 @@ class Detector:
         with torch.no_grad():
             predictions = self.model([image_tensor])
 
-            # Process the predictions
-            ans = []
-            for pred in predictions:
-                processed_pred = {k: v.tolist() for k, v in pred.items()}
-                processed_pred["categories"] = [
-                    self.labels[i] for i in processed_pred["labels"]
-                ]
-                processed_pred["boxes"] = [
-                    [int(z) for z in box] for box in processed_pred["boxes"]
-                ]
-                ans.append(processed_pred)
-
-            return ans
+            return to_predictions(predictions, self.labels)
 
     def predict_batch(
         self, frame_ids: List[int], frames: List[Image]
@@ -130,6 +119,7 @@ class Detector:
         Returns:
             List of (frame_id, predictions) tuples
         """
+        # TODO: convert to Prediction objects
         # Preprocess frames into tensors
         tensors = self.preprocess_batch(frames)
 
@@ -151,9 +141,7 @@ class Detector:
 
         return results
 
-    def add_to_batch(
-        self, frame_id: int, frame: Image
-    ) -> List[Tuple[int, List[Dict[str, Any]]]]:
+    def add_to_batch(self, frame_id: int, frame: Image) -> List[Prediction]:
         """
         Add a frame to the batch buffer.
 
@@ -177,7 +165,7 @@ class Detector:
             return results
         return []
 
-    def flush_batch(self) -> List[Tuple[int, List[Dict[str, Any]]]]:
+    def flush_batch(self) -> List[Prediction]:
         """
         Process any remaining frames in the buffer.
 
