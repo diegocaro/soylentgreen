@@ -19,7 +19,6 @@ from ipywidgets import (
 
 from aqara_video.core.clip import Clip
 from aqara_video.core.factory import TimelineFactory
-from aqara_video.core.video_reader import Frame
 from aqara_video.providers.aqara import AqaraProvider
 
 MAPPING_CAMERAS = {
@@ -29,7 +28,7 @@ MAPPING_CAMERAS = {
 
 # Define simple callback types
 ClipCallback = Callable[[Clip], None]
-FrameCallback = Callable[[bytes, int], None]
+FrameCallback = Callable[[Clip, bytes, int], None]
 FinishCallback = Callable[[], None]
 
 
@@ -157,7 +156,7 @@ class VideoProcessor:
                 if not self.clip_queue.empty():
                     break  # New clip available, stop current playback
 
-                if self.paused and frame.n > 0:
+                if self.paused and frame.frame_id > 0:
                     break  # Stop if paused, but always show at least the first frame
 
                 _, jpeg = cv2.imencode(".jpg", frame.frame)
@@ -165,9 +164,9 @@ class VideoProcessor:
 
                 # Signal to the UI that a new frame is available
                 if self.on_frame_ready is not None:
-                    self.on_frame_ready(jpeg_bytes, frame.n)
+                    self.on_frame_ready(selected_clip, jpeg_bytes, frame.frame_id)
 
-                if self.first_frame_only and frame.n == 0:
+                if self.first_frame_only and frame.frame_id == 0:
                     break
 
             # Signal to advance to the next clip if available
@@ -302,12 +301,13 @@ class JupyterViewerUI:
     def on_clip_loaded(self, clip: Clip) -> None:
         """Callback for when a clip begins processing."""
         self.text_box.value = (
-            f"{clip.path} fps={clip.fps:.2f}, {clip.width}x{clip.height}"
+            f"{clip.path} fps={clip.fps:.2f}, {clip.width}x{clip.height}, frame_id=0"
         )
 
-    def on_frame_ready(self, jpeg_bytes: bytes, frame_id: int) -> None:
+    def on_frame_ready(self, clip: Clip, jpeg_bytes: bytes, frame_id: int) -> None:
         """Callback for when a new frame is ready to display."""
         self.img_widget.value = jpeg_bytes
+        self.text_box.value = f"{clip.path} fps={clip.fps:.2f}, {clip.width}x{clip.height}, frame_id={frame_id}"
 
     def on_clip_finished(self) -> None:
         """Callback for when clip playback is complete."""

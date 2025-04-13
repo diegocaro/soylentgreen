@@ -40,9 +40,7 @@ def test_frame_extraction(video_path, max_frames=200):
     frame_count = 0
     for frame in reader.frames():
         frame_count += 1
-        print(
-            f"Frame {frame_count}: ID={frame.n}, Time={frame.time_sec:.3f}s, Shape={frame.frame.shape}"
-        )
+        print(f"Frame {frame_count}: ID={frame.frame_id}, Shape={frame.frame.shape}")
 
         if frame_count >= max_frames:
             print(f"Reached max frame count of {max_frames}")

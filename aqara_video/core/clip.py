@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Iterator
 
 from .types import Image
-from .video_reader import Frame, VideoMetadata, VideoReader
+from .video_reader import VideoFrame, VideoMetadata, VideoReader
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,7 @@ class Clip:
     def read_frame(self) -> Image:
         return self._reader.read_frame()
 
-    def frames(self, buffer_size: int = 1) -> Iterator[Frame]:
+    def frames(self, buffer_size: int = 1) -> Iterator[VideoFrame]:
         """
         Generate frames from video clip.
 

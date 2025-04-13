@@ -8,7 +8,7 @@ import pytest
 
 from aqara_video.core.video_reader import (
     Format,
-    Frame,
+    VideoFrame,
     VideoMetadata,
     VideoReader,
     VideoStream,
@@ -227,14 +227,12 @@ def test_frames_generator(
 
     assert len(frames) == 5
     for i, frame in enumerate(frames):
-        assert isinstance(frame, Frame)
-        assert frame.n == i
+        assert isinstance(frame, VideoFrame)
+        assert frame.frame_id == i
         assert isinstance(frame.frame, np.ndarray)
         assert frame.frame.shape == (1080, 1920, 3)
         # Check if the frame has the correct value (based on our mock implementation)
         assert np.all(frame.frame == i)
-        # Also verify the time_sec attribute is present
-        assert hasattr(frame, "time_sec")
 
 
 def test_frames_buffer_size_not_implemented() -> None:
