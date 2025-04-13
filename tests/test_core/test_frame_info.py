@@ -8,12 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from aqara_video.core.video_reader import Frame, VideoReader
+from aqara_video.core.video_reader import VideoReader
+
+DEFAULT_VIDEO_PATH = "tests/videos/living_room.mp4"
 
 
 @pytest.fixture
 def video_path():
-    return "tests/videos/living_room.mp4"
+    """Return the default test video path for pytest."""
+    return DEFAULT_VIDEO_PATH
 
 
 def test_frame_extraction(video_path, max_frames=200):
@@ -37,7 +40,9 @@ def test_frame_extraction(video_path, max_frames=200):
     frame_count = 0
     for frame in reader.frames():
         frame_count += 1
-        print(f"Frame {frame_count}: ID={frame.n}, Time={frame.time_sec:.3f}s, Shape={frame.frame.shape}")
+        print(
+            f"Frame {frame_count}: ID={frame.n}, Time={frame.time_sec:.3f}s, Shape={frame.frame.shape}"
+        )
 
         if frame_count >= max_frames:
             print(f"Reached max frame count of {max_frames}")
@@ -47,11 +52,8 @@ def test_frame_extraction(video_path, max_frames=200):
 
 
 if __name__ == "__main__":
-    # Use a test video if available, otherwise specify a path
     if len(sys.argv) > 1:
-        filename = sys.argv[1]
+        video_file = sys.argv[1]
+        test_frame_extraction(video_file)
     else:
-        # Make sure we're using the correct path
-        filename = video_path()
-
-    test_frame_extraction(video_path)
+        test_frame_extraction(DEFAULT_VIDEO_PATH)
