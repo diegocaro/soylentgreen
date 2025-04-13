@@ -322,94 +322,75 @@ class VideoReader:
         raise NotImplementedError(
             "Precise timestamp reading is not implemented yet. Use basic reading instead."
         )
-        if buffer_size > 1:
-            raise NotImplementedError("Buffering not implemented yet.")
-
-        if start_time < 0 or start_time >= self.duration:
-            raise ValueError(f"Start time {start_time} is outside video duration")
-
-        stream = self.best_stream
-        if stream_index is not None:
-            stream = self.metadata.streams[stream_index]
-
-        input_args = {}
-        if start_time > 0:
-            input_args["ss"] = start_time
-
-        process = (
-            ffmpeg.input(str(self.path), **input_args)
-            .filter("showinfo")
-            .output(
-                "pipe:",
-                format="rawvideo",
-                pix_fmt="bgr24",
-                loglevel="info",  # We need at least info level to get showinfo output
-            )
-            .global_args("-map", f"0:{stream.index}")
-            .run_async(pipe_stdout=True, pipe_stderr=True)
-        )
-
-        timestamps_queue = queue.Queue()
-
-        # Function to read stderr in background
-        def read_stderr():
-            while True:
-                line = process.stderr.readline()
-                if not line:
-                    break
-                decoded_line = line.decode("utf-8", errors="replace").strip()
-
-                # Try to extract frame ID and timestamp from showinfo
-                timestamp_info = _parse_showinfo_timestamp(decoded_line)
-                if timestamp_info:
-                    timestamps_queue.put(timestamp_info)
-
-        def _parse_showinfo_timestamp(line: str) -> Optional[Tuple[int, float]]:
-            """Extract frame ID and PTS time from showinfo filter output.
-
-            Example line:
-            [Parsed_showinfo_0 @ 0x7b81940] n: 132 pts: 594000 pts_time:6.6 duration: 4500...
-            """
-            if "showinfo" not in line:
-                return None
-
-            # Check for the standard pattern that includes frame number and timestamp
-            pattern = r"n:\s*(\d+).+pts_time:([\d\.]+)"
-
-            match = re.search(pattern, line)
-            if match:
-                frame_id = int(match.group(1))
-                pts_time = float(match.group(2))
-                return frame_id, pts_time
-
-            # print("No match found in line:", line)
-            return None
-
-        # Start stderr reader thread
-        stderr_thread = threading.Thread(target=read_stderr, daemon=True)
-        stderr_thread.start()
-
-        try:
-            bytes_per_frame = stream.width * stream.height * 3
-
-            while True:
-                in_bytes = process.stdout.read(bytes_per_frame)
-                if not in_bytes or len(in_bytes) < bytes_per_frame:
-                    break
-
-                frame_data = self._bytes_to_frame(in_bytes, stream)
-                frame_id = -1
-                frame_time = -1.0
-
-                # Take just one timestamp from the queue for this frame
-                if not timestamps_queue.empty():
-                    frame_id, frame_time = timestamps_queue.get()
-
-                yield VideoFrame(
-                    frame_id=frame_id, time_sec=frame_time, frame=frame_data
-                )
-
-        finally:
-            # Ensure resources are properly cleaned up
-            process.stdout.close()
-            process.wait()
+        # if buffer_size > 1:
+        #     raise NotImplementedError("Buffering not implemented yet.")
+        # if start_time < 0 or start_time >= self.duration:
+        #     raise ValueError(f"Start time {start_time} is outside video duration")
+        # stream = self.best_stream
+        # if stream_index is not None:
+        #     stream = self.metadata.streams[stream_index]
+        # input_args = {}
+        # if start_time > 0:
+        #     input_args["ss"] = start_time
+        # process = (
+        #     ffmpeg.input(str(self.path), **input_args)
+        #     .filter("showinfo")
+        #     .output(
+        #         "pipe:",
+        #         format="rawvideo",
+        #         pix_fmt="bgr24",
+        #         loglevel="info",  # We need at least info level to get showinfo output
+        #     )
+        #     .global_args("-map", f"0:{stream.index}")
+        #     .run_async(pipe_stdout=True, pipe_stderr=True)
+        # )
+        # timestamps_queue = queue.Queue()
+        # # Function to read stderr in background
+        # def read_stderr():
+        #     while True:
+        #         line = process.stderr.readline()
+        #         if not line:
+        #             break
+        #         decoded_line = line.decode("utf-8", errors="replace").strip()
+        #         # Try to extract frame ID and timestamp from showinfo
+        #         timestamp_info = _parse_showinfo_timestamp(decoded_line)
+        #         if timestamp_info:
+        #             timestamps_queue.put(timestamp_info)
+        # def _parse_showinfo_timestamp(line: str) -> Optional[Tuple[int, float]]:
+        #     """Extract frame ID and PTS time from showinfo filter output.
+        #     Example line:
+        #     [Parsed_showinfo_0 @ 0x7b81940] n: 132 pts: 594000 pts_time:6.6 duration: 4500...
+        #     """
+        #     if "showinfo" not in line:
+        #         return None
+        #     # Check for the standard pattern that includes frame number and timestamp
+        #     pattern = r"n:\s*(\d+).+pts_time:([\d\.]+)"
+        #     match = re.search(pattern, line)
+        #     if match:
+        #         frame_id = int(match.group(1))
+        #         pts_time = float(match.group(2))
+        #         return frame_id, pts_time
+        #     # print("No match found in line:", line)
+        #     return None
+        # # Start stderr reader thread
+        # stderr_thread = threading.Thread(target=read_stderr, daemon=True)
+        # stderr_thread.start()
+        # try:
+        #     bytes_per_frame = stream.width * stream.height * 3
+        #     while True:
+        #         in_bytes = process.stdout.read(bytes_per_frame)
+        #         if not in_bytes or len(in_bytes) < bytes_per_frame:
+        #             break
+        #         frame_data = self._bytes_to_frame(in_bytes, stream)
+        #         frame_id = -1
+        #         frame_time = -1.0
+        #         # Take just one timestamp from the queue for this frame
+        #         if not timestamps_queue.empty():
+        #             frame_id, frame_time = timestamps_queue.get()
+        #         yield VideoFrame(
+        #             frame_id=frame_id, time_sec=frame_time, frame=frame_data
+        #         )
+        # finally:
+        #     # Ensure resources are properly cleaned up
+        #     process.stdout.close()
+        #     process.wait()
