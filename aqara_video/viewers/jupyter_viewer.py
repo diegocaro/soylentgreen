@@ -1,21 +1,32 @@
 import threading
 from pathlib import Path
 from queue import Queue
-from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import cv2
 from IPython.display import display
-from ipywidgets import Dropdown, HBox, Image, Layout, SelectionSlider, Text, VBox
+from ipywidgets import (
+    Button,
+    Checkbox,
+    Dropdown,
+    HBox,
+    Image,
+    Layout,
+    SelectionSlider,
+    Text,
+    VBox,
+)
 
 from aqara_video.core.clip import Clip
 from aqara_video.core.factory import TimelineFactory
+from aqara_video.providers.aqara import AqaraProvider
 
 MAPPING_CAMERAS = {
     "lumi1.54ef44457bc9": "Pasto",
     "lumi1.54ef44603857": "Living",
 }
 
-# Define callback types
+# Define simple callback types
 ClipCallback = Callable[[Clip], None]
 FrameCallback = Callable[[bytes, int], None]
 FinishCallback = Callable[[], None]
@@ -42,6 +53,10 @@ class VideoProcessor:
 
         self.clips: List[Clip] = []
         self.clip_queue: Queue[Clip] = Queue(maxsize=1000)
+        self.first_frame_only: bool = True  # Default to showing only first frame
+        self.paused: bool = True  # Start in paused state
+        self.current_clip_index: Optional[int] = None  # Track current clip index
+        self.resume_playback: bool = False
 
         # Define callback handlers
         self.on_clip_loaded: Optional[ClipCallback] = None
@@ -59,8 +74,8 @@ class VideoProcessor:
     def cameras(self) -> List[Tuple[str, Path]]:
         """Get a list of available cameras with their human-readable names."""
         return [
-            (self.mapping_cameras.get(c.name, c.name), c)
-            for c in Path(self.videos_path).glob("lumi1.*")
+            (self.mapping_cameras.get(c, c), self.videos_path / c)
+            for c in AqaraProvider.cameras_in_dir(self.videos_path)
         ]
 
     def load_clips_for_camera(self, camera_path: Path) -> List[Clip]:
@@ -84,7 +99,37 @@ class VideoProcessor:
     def queue_clip(self, clip_index: int) -> None:
         """Queue a clip to be processed."""
         if 0 <= clip_index < len(self.clips):
+            self.current_clip_index = clip_index
             self.clip_queue.put(self.clips[clip_index])
+
+    def toggle_pause(self) -> bool:
+        """Toggle the pause state of the video playback.
+
+        Returns:
+            bool: The new pause state (True = paused, False = playing)
+        """
+        self.paused = not self.paused
+
+        # If we're resuming playback, set the resume flag but don't queue
+        # a new clip - instead, we'll continue from where we left off
+        if not self.paused and self.current_clip_index is not None:
+            self.resume_playback = True
+            self.clip_queue.put(self.clips[self.current_clip_index])
+
+        return self.paused
+
+    def previous_clip(self) -> None:
+        """Load the previous clip if available."""
+        if self.current_clip_index is not None and self.current_clip_index > 0:
+            self.queue_clip(self.current_clip_index - 1)
+
+    def next_clip(self) -> None:
+        """Load the next clip if available."""
+        if (
+            self.current_clip_index is not None
+            and self.current_clip_index < len(self.clips) - 1
+        ):
+            self.queue_clip(self.current_clip_index + 1)
 
     def refresh_loop(self) -> None:
         """Thread function to process video clips and update the UI."""
@@ -100,21 +145,32 @@ class VideoProcessor:
             if self.on_clip_loaded is not None:
                 self.on_clip_loaded(selected_clip)
 
+            # Reset current frame when loading a new clip, unless we're resuming playback
+            if not self.resume_playback:
+                # play from the start
+                pass
+            self.resume_playback = False  # Reset the resume flag
+
+            # Process the clip's frames
             for frame_id, frame in selected_clip.frames():
                 if not self.clip_queue.empty():
                     break  # New clip available, stop current playback
 
-                if frame_id % 60 == 0:
-                    _, jpeg = cv2.imencode(".jpg", frame)
-                    jpeg_bytes = jpeg.tobytes()
+                if self.paused and frame_id > 0:
+                    break  # Stop if paused, but always show at least the first frame
 
-                    # Signal to the UI that a new frame is available
-                    if self.on_frame_ready is not None:
-                        self.on_frame_ready(jpeg_bytes, frame_id)
+                _, jpeg = cv2.imencode(".jpg", frame)
+                jpeg_bytes = jpeg.tobytes()
+
+                # Signal to the UI that a new frame is available
+                if self.on_frame_ready is not None:
+                    self.on_frame_ready(jpeg_bytes, frame_id)
+
+                if self.first_frame_only and frame_id == 0:
                     break
 
             # Signal to advance to the next clip if available
-            if self.on_clip_finished is not None:
+            if self.on_clip_finished is not None and not self.paused:
                 self.on_clip_finished()
 
 
@@ -156,16 +212,60 @@ class JupyterViewerUI:
             layout=Layout(width="1000px"),
         )
 
+        # Create first frame toggle checkbox
+        self.first_frame_checkbox = Checkbox(
+            value=self.processor.first_frame_only,
+            description="Show only first frame",
+            disabled=False,
+        )
+
+        # Create playback control buttons
+        self.play_button = Button(
+            description="Play",
+            disabled=False,
+            button_style="success",
+            tooltip="Play/Stop video",
+            icon="play",
+        )
+
+        self.prev_button = Button(
+            description="Previous",
+            disabled=False,
+            button_style="info",
+            tooltip="Previous clip",
+            icon="step-backward",
+        )
+
+        self.next_button = Button(
+            description="Next",
+            disabled=False,
+            button_style="info",
+            tooltip="Next clip",
+            icon="step-forward",
+        )
+
+        # Set up button callback handlers
+        self.play_button.on_click(self.on_play_button_click)
+        self.prev_button.on_click(self.on_prev_button_click)
+        self.next_button.on_click(self.on_next_button_click)
+
+        # Controls container
+        self.controls = HBox([self.prev_button, self.play_button, self.next_button])
+
         # Set up event handlers
         self.dropdown_cameras.observe(self.update_days, names="value")
         self.dropdown_days.observe(self.update_minutes, names="value")
         self.selector_minutes.observe(self.update_video, names="value")
+        self.first_frame_checkbox.observe(self.toggle_first_frame_only, names="value")
 
         # Initial update
         self.update_days()
 
     def update_days(self, *args: Any) -> None:
         """Update the days dropdown based on camera selection."""
+        if not self.dropdown_cameras.value:
+            return
+
         self.processor.load_clips_for_camera(self.dropdown_cameras.value)
 
         days = self.processor.get_unique_days()
@@ -184,6 +284,9 @@ class JupyterViewerUI:
         if minutes:  # Only update if we have options
             self.selector_minutes.options = minutes
             self.selector_minutes.disabled = False
+
+            if self.processor.paused:
+                self.on_play_button_click(None)  # type: ignore
         else:
             self.selector_minutes.options = []
             self.selector_minutes.disabled = True
@@ -207,79 +310,59 @@ class JupyterViewerUI:
 
     def on_clip_finished(self) -> None:
         """Callback for when clip playback is complete."""
-        # Advance to the next clip if available (same behavior as before)
+        # Advance to the next clip if available
         if self.selector_minutes.index + 1 < len(self.selector_minutes.options):
             self.selector_minutes.index += 1
+
+    def toggle_first_frame_only(self, change: Dict[str, Any]) -> None:
+        """Toggle the first frame only setting in the processor."""
+        self.processor.first_frame_only = change["new"]
+
+        # If we're switching modes, reload the current clip to see the effect immediately
+        if self.selector_minutes.value is not None:
+            self.processor.queue_clip(self.selector_minutes.value)
+
+    def on_play_button_click(self, b: Button) -> None:
+        """Callback for when the play button is clicked."""
+        self.processor.toggle_pause()
+        self.play_button.icon = "pause" if not self.processor.paused else "play"
+        self.play_button.description = "Pause" if not self.processor.paused else "Play"
+
+    def on_prev_button_click(self, b: Button) -> None:
+        """Callback for when the previous button is clicked."""
+        self.processor.previous_clip()
+
+    def on_next_button_click(self, b: Button) -> None:
+        """Callback for when the next button is clicked."""
+        self.processor.next_clip()
 
     def render(self):
         """Display the viewer interface."""
         return VBox(
             [
-                self.dropdown_cameras,
-                self.dropdown_days,
-                self.selector_minutes,
+                HBox(
+                    [self.dropdown_cameras, self.dropdown_days, self.selector_minutes]
+                ),
                 self.text_box,
+                HBox([self.controls, self.first_frame_checkbox]),
                 HBox([self.img_widget]),
             ]
         )
 
-
-class JupyterViewer:
-    """Legacy class that maintains backwards compatibility with existing code."""
-
-    def __init__(
-        self, videos_path: Path, cameras_names: Optional[Dict[str, str]] = None
-    ):
-        """
-        Initialize the Aqara Viewer
-
-        Args:
-            videos_path (Path): Path to the directory containing video files
-            cameras_names (dict, optional): Mapping of camera names to human-readable names
-        """
-        self.ui = JupyterViewerUI(videos_path, cameras_names)
-        self.processor = self.ui.processor
-
-        # Mirror properties from the UI for backward compatibility
-        self.videos_path = videos_path
-        self.mapping_cameras = self.processor.mapping_cameras
-        self.img_widget = self.ui.img_widget
-        self.dropdown_cameras = self.ui.dropdown_cameras
-        self.text_box = self.ui.text_box
-        self.dropdown_days = self.ui.dropdown_days
-        self.selector_minutes = self.ui.selector_minutes
-        self.clips = self.processor.clips
-        self.clip_queue = self.processor.clip_queue
-
-    @property
-    def cameras(self):
-        return self.processor.cameras
-
-    def update_days(self, *args: Any) -> None:
-        self.ui.update_days(*args)
-
-    def update_minutes(self, *args: Any) -> None:
-        self.ui.update_minutes(*args)
-
-    def update_video(self, *args: Any) -> None:
-        self.ui.update_video(*args)
-
-    def render(self):
-        return self.ui.render()
-
     @classmethod
-    def create_from_path(cls, videos_path: Path | str) -> "JupyterViewer":
+    def create_from_path(cls, videos_path: Union[Path, str]) -> "JupyterViewerUI":
         """
-        Create and display an Aqara video viewer
+        Create and display a Jupyter viewer widget
 
         Args:
-            videos_path (str): Path to the directory containing video files
+            videos_path (str or Path): Path to the directory containing video files
 
         Returns:
-            AqaraViewer: The viewer instance
+            JupyterViewerUI: The viewer instance
         """
         if isinstance(videos_path, str):
             videos_path = Path(videos_path)
-        viewer = JupyterViewer(videos_path)
+
+        viewer = JupyterViewerUI(videos_path)
         display(viewer.render())
         return viewer
