@@ -4,6 +4,7 @@ from queue import Queue
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import cv2
+import torch
 from IPython.display import display
 from ipywidgets import (
     Button,
@@ -19,6 +20,8 @@ from ipywidgets import (
 
 from aqara_video.core.clip import Clip
 from aqara_video.core.factory import TimelineFactory
+from aqara_video.ml.detector import Detector
+from aqara_video.ml.utils import draw_boxes
 from aqara_video.providers.aqara import AqaraProvider
 
 MAPPING_CAMERAS = {
@@ -57,6 +60,12 @@ class VideoProcessor:
         self.paused: bool = True  # Start in paused state
         self.current_clip_index: Optional[int] = None  # Track current clip index
         self.resume_playback: bool = False
+
+        # Object detection settings
+        self.detect_objects: bool = True  # Default to detecting objects
+        self.detection_threshold: float = 0.5
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.detector = None  # Lazy initialization for detector
 
         # Define callback handlers
         self.on_clip_loaded: Optional[ClipCallback] = None
@@ -151,6 +160,10 @@ class VideoProcessor:
                 pass
             self.resume_playback = False  # Reset the resume flag
 
+            # Initialize detector if needed and object detection is enabled
+            if self.detect_objects and self.detector is None:
+                self.detector = Detector(device=self.device, batch_size=1)
+
             # Process the clip's frames
             for frame in selected_clip.frames():
                 if not self.clip_queue.empty():
@@ -159,7 +172,22 @@ class VideoProcessor:
                 if self.paused and frame.frame_id > 0:
                     break  # Stop if paused, but always show at least the first frame
 
-                _, jpeg = cv2.imencode(".jpg", frame.frame)
+                # Apply object detection if enabled
+                current_frame = frame.frame
+                if self.detect_objects and self.detector is not None:
+                    # Preprocess the frame
+                    tensor = self.detector.preprocess(current_frame)
+                    # Make predictions
+                    predictions = self.detector.predict(tensor)
+                    # Draw bounding boxes
+                    current_frame = draw_boxes(
+                        current_frame.copy(),
+                        predictions,
+                        threshold=self.detection_threshold,
+                    )
+
+                # Encode the frame as JPEG
+                _, jpeg = cv2.imencode(".jpg", current_frame)
                 jpeg_bytes = jpeg.tobytes()
 
                 # Signal to the UI that a new frame is available
@@ -219,6 +247,13 @@ class JupyterViewerUI:
             disabled=False,
         )
 
+        # Create object detection checkbox
+        self.detect_objects_checkbox = Checkbox(
+            value=self.processor.detect_objects,
+            description="Detect objects",
+            disabled=False,
+        )
+
         # Create playback control buttons
         self.play_button = Button(
             description="Play",
@@ -257,6 +292,9 @@ class JupyterViewerUI:
         self.dropdown_days.observe(self.update_minutes, names="value")
         self.selector_minutes.observe(self.update_video, names="value")
         self.first_frame_checkbox.observe(self.toggle_first_frame_only, names="value")
+        self.detect_objects_checkbox.observe(
+            self.toggle_object_detection, names="value"
+        )
 
         # Initial update
         self.update_days()
@@ -323,6 +361,14 @@ class JupyterViewerUI:
         if self.selector_minutes.value is not None:
             self.processor.queue_clip(self.selector_minutes.value)
 
+    def toggle_object_detection(self, change: Dict[str, Any]) -> None:
+        """Toggle the object detection setting in the processor."""
+        self.processor.detect_objects = change["new"]
+
+        # If we're switching modes, reload the current clip to see the effect immediately
+        if self.selector_minutes.value is not None:
+            self.processor.queue_clip(self.selector_minutes.value)
+
     def on_play_button_click(self, b: Button) -> None:
         """Callback for when the play button is clicked."""
         self.processor.toggle_pause()
@@ -345,7 +391,13 @@ class JupyterViewerUI:
                     [self.dropdown_cameras, self.dropdown_days, self.selector_minutes]
                 ),
                 self.text_box,
-                HBox([self.controls, self.first_frame_checkbox]),
+                HBox(
+                    [
+                        self.controls,
+                        self.first_frame_checkbox,
+                        self.detect_objects_checkbox,
+                    ]
+                ),
                 HBox([self.img_widget]),
             ]
         )
