@@ -17,10 +17,10 @@ class Box:
 
 @dataclass
 class Prediction:
-    boxes: list[Box]
-    scores: list[float]
-    labels: list[int]
-    categories: list[str]
+    boxes: List[Box]
+    scores: List[float]
+    labels: List[int]
+    categories: List[str]
 
 
 def draw_box_with_label(
@@ -54,7 +54,7 @@ def draw_box_with_label(
     x1, y1, x2, y2 = box.x1, box.y1, box.x2, box.y2
 
     # Draw the bounding box
-    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, 2)
 
     # Create label text
     label_text = f"{label}: {score:.2f}"
@@ -70,7 +70,7 @@ def draw_box_with_label(
         frame,
         (x1, y1 - text_height - 5),  # Top-left corner
         (x1 + text_width, y1),  # Bottom-right corner
-        box_color,  # Green color
+        box_color,
         -1,  # Filled rectangle
     )
 
@@ -81,7 +81,7 @@ def draw_box_with_label(
         (x1, y1 - 5),  # Position slightly above box
         text_params["fontFace"],
         text_params["fontScale"],
-        text_color,  # Black text color
+        text_color,
         text_params["thickness"],
     )
 
@@ -101,7 +101,7 @@ def draw_boxes(
         Image: The frame with bounding boxes and labels drawn on it
     """
     if len(predictions) == 0:
-        print("nothing was detected")
+        print("Nothing was detected")
         return frame
 
     # Get the first prediction from the list
@@ -142,7 +142,15 @@ def to_predictions(
         boxes = [[int(z) for z in box] for box in pred["boxes"].tolist()]
         scores = pred["scores"].tolist()
         labels = pred["labels"].tolist()
-        categories_list = [categories[label] for label in labels]
+
+        # Validate label indices are within range of categories
+        categories_list = []
+        for label in labels:
+            if 0 <= label < len(categories):
+                categories_list.append(categories[label])
+            else:
+                print(f"Label index {label} out of range. Using 'unknown' as category.")
+                categories_list.append("unknown")
 
         predictions.append(
             Prediction(
