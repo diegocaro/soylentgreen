@@ -10,6 +10,15 @@ import numpy as np
 from .types import Image
 
 
+@dataclass(frozen=True)
+class Frame:
+    """A video frame with its metadata."""
+
+    n: int  # frame_id
+    time_sec: float  # timestamp in seconds
+    frame: Image  # actual image data
+
+
 class Stream:
     pass
 
@@ -251,7 +260,7 @@ class VideoReader:
         start_time: float = 0.0,
         stream_index: Optional[int] = None,
         buffer_size: int = 1,
-    ) -> Iterator[Tuple[int, Image]]:
+    ) -> Iterator[Frame]:
         """
         Generate frames from video with improved memory management.
 
@@ -261,7 +270,7 @@ class VideoReader:
             buffer_size: Maximum number of frames to buffer
 
         Returns:
-            Iterator yielding (frame_id, frame) tuples
+            Iterator yielding Frame objects
         """
         if buffer_size > 1:
             raise NotImplementedError("Buffering not implemented yet.")
@@ -287,6 +296,7 @@ class VideoReader:
         try:
             frame_id = -1
             bytes_per_frame = stream.width * stream.height * 3
+            frame_duration = 1.0 / self.fps
 
             while True:
                 frame_id += 1
@@ -294,8 +304,9 @@ class VideoReader:
                 if not in_bytes or len(in_bytes) < bytes_per_frame:
                     break
 
-                frame = self._bytes_to_frame(in_bytes, stream)
-                yield (frame_id, frame)
+                frame_data = self._bytes_to_frame(in_bytes, stream)
+                frame_time = start_time + (frame_id * frame_duration)
+                yield Frame(n=frame_id, time_sec=frame_time, frame=frame_data)
 
         finally:
             # Ensure resources are properly cleaned up

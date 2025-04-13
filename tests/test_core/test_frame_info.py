@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from aqara_video.core.video_reader import VideoReader
+from aqara_video.core.video_reader import Frame, VideoReader
 
 
 @pytest.fixture
@@ -35,9 +35,9 @@ def test_frame_extraction(video_path, max_frames=200):
     print("\nExtracting frames...")
 
     frame_count = 0
-    for frame_id, frame in reader.frames():
+    for frame in reader.frames():
         frame_count += 1
-        print(f"Frame {frame_count}: ID={frame_id}, Shape={frame.shape}")
+        print(f"Frame {frame_count}: ID={frame.n}, Time={frame.time_sec:.3f}s, Shape={frame.frame.shape}")
 
         if frame_count >= max_frames:
             print(f"Reached max frame count of {max_frames}")

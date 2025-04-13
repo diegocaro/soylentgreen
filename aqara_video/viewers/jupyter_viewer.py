@@ -19,6 +19,7 @@ from ipywidgets import (
 
 from aqara_video.core.clip import Clip
 from aqara_video.core.factory import TimelineFactory
+from aqara_video.core.video_reader import Frame
 from aqara_video.providers.aqara import AqaraProvider
 
 MAPPING_CAMERAS = {
@@ -152,21 +153,21 @@ class VideoProcessor:
             self.resume_playback = False  # Reset the resume flag
 
             # Process the clip's frames
-            for frame_id, frame in selected_clip.frames():
+            for frame in selected_clip.frames():
                 if not self.clip_queue.empty():
                     break  # New clip available, stop current playback
 
-                if self.paused and frame_id > 0:
+                if self.paused and frame.n > 0:
                     break  # Stop if paused, but always show at least the first frame
 
-                _, jpeg = cv2.imencode(".jpg", frame)
+                _, jpeg = cv2.imencode(".jpg", frame.frame)
                 jpeg_bytes = jpeg.tobytes()
 
                 # Signal to the UI that a new frame is available
                 if self.on_frame_ready is not None:
-                    self.on_frame_ready(jpeg_bytes, frame_id)
+                    self.on_frame_ready(jpeg_bytes, frame.n)
 
-                if self.first_frame_only and frame_id == 0:
+                if self.first_frame_only and frame.n == 0:
                     break
 
             # Signal to advance to the next clip if available

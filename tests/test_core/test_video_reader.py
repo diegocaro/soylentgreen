@@ -8,6 +8,7 @@ import pytest
 
 from aqara_video.core.video_reader import (
     Format,
+    Frame,
     VideoMetadata,
     VideoReader,
     VideoStream,
@@ -192,7 +193,7 @@ def test_read_frame_async() -> None:
     reader = VideoReader(Path("/path/to/test.mp4"))
 
     with pytest.raises(NotImplementedError):
-        reader._read_frame_async(Mock())
+        reader._read_frame_async(Mock(), Mock())
 
 
 @patch("ffmpeg.input")
@@ -225,12 +226,15 @@ def test_frames_generator(
     mock_output.run_async.assert_called_once_with(pipe_stdout=True)
 
     assert len(frames) == 5
-    for i, (frame_id, frame) in enumerate(frames):
-        assert frame_id == i
-        assert isinstance(frame, np.ndarray)
-        assert frame.shape == (1080, 1920, 3)
+    for i, frame in enumerate(frames):
+        assert isinstance(frame, Frame)
+        assert frame.n == i
+        assert isinstance(frame.frame, np.ndarray)
+        assert frame.frame.shape == (1080, 1920, 3)
         # Check if the frame has the correct value (based on our mock implementation)
-        assert np.all(frame == i)
+        assert np.all(frame.frame == i)
+        # Also verify the time_sec attribute is present
+        assert hasattr(frame, "time_sec")
 
 
 def test_frames_buffer_size_not_implemented() -> None:

@@ -1,10 +1,10 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, Tuple
+from typing import Iterator
 
 from .types import Image
-from .video_reader import VideoMetadata, VideoReader
+from .video_reader import Frame, VideoMetadata, VideoReader
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,7 @@ class Clip:
     def read_frame(self) -> Image:
         return self._reader.read_frame()
 
-    def frames(self, buffer_size: int = 1) -> Iterator[Tuple[int, Image]]:
+    def frames(self, buffer_size: int = 1) -> Iterator[Frame]:
         """
         Generate frames from video clip.
 
@@ -48,6 +48,6 @@ class Clip:
             buffer_size: Maximum number of frames to buffer
 
         Returns:
-            Iterator yielding (frame_id, frame) tuples
+            Iterator yielding Frame objects
         """
         return self._reader.frames(buffer_size=buffer_size)
