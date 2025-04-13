@@ -92,7 +92,7 @@ from aqara_video.viewers.jupyter_viewer import JupyterViewer
 # Create and display a viewer for browsing camera footage
 viewer = JupyterViewer.create_from_path("/path/to/aqara_video/lumi1.54ef44457bc9")
 ```
-![JupyterViewer widget](assets/jupyter_viewer.png)
+![JupyterViewer widget](assets/jupyter_viewer2.png)
 
 ### Video Analysis
 
