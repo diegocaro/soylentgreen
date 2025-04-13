@@ -1,52 +1,12 @@
 import argparse
 import threading
 from abc import ABC, abstractmethod
-from pathlib import Path
 from queue import Queue
 
 import cv2
-import torch
-from PIL import Image
-from torchvision import models, transforms
 
-
-class Detector:
-    def __init__(self, device: str = "cpu"):
-        weights = models.detection.FasterRCNN_MobileNet_V3_Large_320_FPN_Weights.DEFAULT
-        self.labels = list(weights.meta["categories"])
-
-        self.device = torch.device(device)
-        self.model = models.detection.fasterrcnn_mobilenet_v3_large_320_fpn(
-            weights=weights
-        )
-        self.model.to(self.device)
-        self.model.eval()
-
-    def transform(self):
-        ret = transforms.Compose(
-            [
-                transforms.ToTensor(),  # Convert the image to a tensor
-            ]
-        )
-        return ret
-
-    def preprocess(self, cv_image):
-        pil_image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
-        image_tensor = self.transform()(pil_image).to(self.device)
-        return image_tensor
-
-    def predict(self, image_tensor):
-        def tensor_to_list(pred):
-            ans = {k: v.tolist() for k, v in pred.items()}
-            ans["categories"] = [self.labels[i] for i in ans["labels"]]
-            map_int = lambda x: [int(z) for z in x]
-            ans["boxes"] = [map_int(box) for box in ans["boxes"]]
-            return ans
-
-        with torch.no_grad():
-            predictions = self.model([image_tensor])
-            ans = [tensor_to_list(x) for x in predictions]
-            return ans
+from aqara_video.ml.detector import Detector
+from aqara_video.ml.utils import draw_boxes
 
 
 class VideoAbstract(ABC):
@@ -80,64 +40,6 @@ class VideoLoop:
     def __init__(self, video_producer: VideoAbstract):
         self.video_producer = video_producer
 
-    def _draw_box_with_label(
-        self, frame, box, label, score, box_color=(0, 255, 0), text_color=(0, 0, 0)
-    ):
-        text_params = {
-            "fontFace": cv2.FONT_HERSHEY_SIMPLEX,
-            "fontScale": 1,
-            "thickness": 2,
-        }
-        x1, y1, x2, y2 = box
-        # Draw the bounding box
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-
-        # Create label text
-        label_text = f"{label}: {score:.2f}"
-
-        # Get text size
-        (text_width, text_height), baseline = cv2.getTextSize(label_text, **text_params)
-        border = 5
-        text_width += border
-        text_height += border
-
-        # Draw filled rectangle for text background
-        cv2.rectangle(
-            frame,
-            (x1, y1 - text_height - 5),  # Top-left corner
-            (x1 + text_width, y1),  # Bottom-right corner
-            box_color,  # Green color
-            -1,  # Filled rectangle
-        )
-
-        # Draw text
-        cv2.putText(
-            frame,
-            label_text,
-            (x1, y1 - 5),  # Position slightly above box
-            text_params["fontFace"],
-            text_params["fontScale"],
-            text_color,  # Black text color
-            text_params["thickness"],
-        )
-
-    def draw_boxes(self, frame, predictions, threshold=0.5):
-        # frame = self.frame
-        # predictions = self.predictions
-        if len(predictions) == 0:
-            print("nothing was detected")
-            return frame
-        # Get the predicted bounding boxes, labels, and scores
-        boxes = predictions[0]["boxes"]
-        scores = predictions[0]["scores"]
-        labels = predictions[0]["categories"]
-
-        # Draw bounding boxes and labels on the frame
-        for i, box in enumerate(boxes):
-            if scores[i] > threshold:
-                self._draw_box_with_label(frame, box, labels[i], scores[i])
-        return frame
-
     def draw(self, frame):
         cv2.imshow("Object Detection", frame)
         if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -149,7 +51,7 @@ class VideoLoop:
 
             predictions = []
             # predictions = model.predict(model.preprocess(frame))
-            frame_with_box = self.draw_boxes(frame, predictions)
+            frame_with_box = draw_boxes(frame, predictions)
             self.draw(frame_with_box)
 
     def process_loop(self, frame_q, pred_q):
@@ -168,7 +70,7 @@ class VideoLoop:
                 new_pred_frame_id, new_predictions = pred_frame_id, predictions
             pred_frame_id, predictions = new_pred_frame_id, new_predictions
             print(f"current_frame: {frame_id} prediction_frame = {pred_frame_id}")
-            frame_with_box = self.draw_boxes(frame, predictions)
+            frame_with_box = draw_boxes(frame, predictions)
             self.draw(frame_with_box)
 
 
