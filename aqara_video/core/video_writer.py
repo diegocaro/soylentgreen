@@ -3,7 +3,7 @@ from pathlib import Path
 import ffmpeg
 
 import aqara_video.core.constants as c
-from aqara_video.core.types import Image
+from aqara_video.core.types import ImageCV
 
 
 class VideoWriter:
@@ -62,7 +62,7 @@ class VideoWriter:
             .run_async(pipe_stdin=True)
         )
 
-    def write_frame(self, frame: Image) -> None:
+    def write_frame(self, frame: ImageCV) -> None:
         """
         Write a frame to the video.
 

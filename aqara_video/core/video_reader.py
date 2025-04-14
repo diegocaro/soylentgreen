@@ -7,7 +7,7 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 import ffmpeg
 import numpy as np
 
-from .types import Image
+from .types import ImageCV
 
 
 @dataclass(frozen=True)
@@ -16,7 +16,7 @@ class VideoFrame:
 
     frame_id: int  # frame ID
     # time_sec: float  # timestamp in seconds, not needed for now
-    frame: Image  # actual image data
+    frame: ImageCV  # actual image data
 
 
 class Stream:
@@ -195,7 +195,7 @@ class VideoReader:
         time_sec: float = 0.0,
         stream_index: Optional[int] = None,
         do_async: bool = False,
-    ) -> Image:
+    ) -> ImageCV:
         """
         Read the first frame from the video using synchronous ffmpeg.
 
@@ -217,11 +217,11 @@ class VideoReader:
             frame = self._read_frame_sync(time_sec=time_sec, stream=stream)
         return frame
 
-    def _bytes_to_frame(self, in_bytes: bytes, stream: VideoStream) -> Image:
+    def _bytes_to_frame(self, in_bytes: bytes, stream: VideoStream) -> ImageCV:
         """Convert bytes to a numpy array representing the frame."""
         return np.frombuffer(in_bytes, np.uint8).reshape(stream.height, stream.width, 3)
 
-    def _read_frame_sync(self, time_sec: float, stream: VideoStream) -> Image:
+    def _read_frame_sync(self, time_sec: float, stream: VideoStream) -> ImageCV:
         input_args = {}
         if time_sec > 0:
             input_args["ss"] = time_sec
@@ -236,7 +236,7 @@ class VideoReader:
 
         return frame
 
-    def _read_frame_async(self, time_sec: float, stream: VideoStream) -> Image:
+    def _read_frame_async(self, time_sec: float, stream: VideoStream) -> ImageCV:
         # Note: this is not really async as we are waiting for the process to finish
         # process = (  # type: ignore
         #     ffmpeg.input(str(self.path))  # type: ignore

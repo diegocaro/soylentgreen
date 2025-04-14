@@ -13,7 +13,7 @@ from joblib import Parallel, delayed
 
 from aqara_video.core.clip import Clip
 from aqara_video.core.factory import TimelineFactory
-from aqara_video.core.types import Image
+from aqara_video.core.types import ImageCV
 from aqara_video.core.video_writer import VideoWriter
 
 
@@ -24,7 +24,7 @@ def is_graphical_environment():
     return True
 
 
-def dynamic_range(frame: Image) -> Dict[str, float]:
+def dynamic_range(frame: ImageCV) -> Dict[str, float]:
     """
     Analyze the dynamic range in a frame.
 
@@ -72,10 +72,10 @@ def dynamic_range(frame: Image) -> Dict[str, float]:
 
 
 def post_process(
-    frame: Image,
+    frame: ImageCV,
     features: Dict[str, float],
     green_threshold: float = 0.2,
-) -> Image:
+) -> ImageCV:
     if frame is None:
         return None
 
@@ -135,7 +135,7 @@ class Timelapse:
         # Setup the video writer
         writer = VideoWriter(output, clip.width, clip.height)
 
-        def process(clip: Clip) -> Image:
+        def process(clip: Clip) -> ImageCV:
             frame = clip.read_frame()
             features = dynamic_range(frame)
             return post_process(
@@ -179,7 +179,7 @@ class VideoPlayer:
 
         cv2.destroyAllWindows()
 
-    def draw(self, frame: Image):
+    def draw(self, frame: ImageCV):
         if frame is None:
             return
         cv2.imshow("frame", frame)
@@ -230,7 +230,7 @@ class VideoPlayer:
         draw_frames(frame_queue)
 
     def show_joblib(self, clips: List[Clip], green_threshold: float = 0.2) -> None:
-        def process(clip: Clip) -> Image:
+        def process(clip: Clip) -> ImageCV:
             frame = clip.read_frame()
             features = dynamic_range(frame)
             return post_process(
