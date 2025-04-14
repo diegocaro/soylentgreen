@@ -2,16 +2,18 @@ import argparse
 import threading
 from abc import ABC, abstractmethod
 from queue import Queue
+from typing import List, Tuple
 
 import cv2
 
+from aqara_video.core.types import ImageCV
 from aqara_video.ml.detector import Detector
-from aqara_video.ml.utils import draw_boxes
+from aqara_video.ml.utils import Prediction, draw_boxes
 
 
 class VideoAbstract(ABC):
     @abstractmethod
-    def capture(self):
+    def capture(self) -> ImageCV:
         pass
 
 
@@ -29,32 +31,36 @@ class VideoOpenCV(VideoAbstract):
             raise ValueError("Error: Could not open webcam.")
         return cap
 
-    def capture(self):
+    def capture(self) -> ImageCV:
         ret, frame = self.cap.read()
         if not ret:
-            raise ValueError
-        return frame
+            raise ValueError("Failed to capture frame from camera")
+        return frame  # type: ignore
 
 
 class VideoLoop:
     def __init__(self, video_producer: VideoAbstract):
         self.video_producer = video_producer
 
-    def draw(self, frame):
+    def draw(self, frame: ImageCV):
         cv2.imshow("Object Detection", frame)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             exit()
 
-    def process(self, model):
+    def process(self, model: Detector):
         while True:
             frame = self.video_producer.capture()
 
-            predictions = []
+            predictions: List[Prediction] = []
             # predictions = model.predict(model.preprocess(frame))
             frame_with_box = draw_boxes(frame, predictions)
             self.draw(frame_with_box)
 
-    def process_loop(self, frame_q, pred_q):
+    def process_loop(
+        self,
+        frame_q: Queue[Tuple[int, ImageCV]],
+        pred_q: Queue[Tuple[int, List[Prediction]]],
+    ):
         frame_id = -1
         predictions = []
         pred_frame_id = 0
@@ -74,17 +80,21 @@ class VideoLoop:
             self.draw(frame_with_box)
 
 
-def consume_frames(frame_q):
+def consume_frames(frame_q: Queue[Tuple[int, ImageCV]]) -> Tuple[int, ImageCV]:
     while not frame_q.empty():
         frame_id, frame = frame_q.get()
         try:
             frame_id, frame = frame_q.get_nowait()
         except:
             break
-    return frame_id, frame
+    return frame_id, frame  # type: ignore
 
 
-def predict_loop(model, frame_q, pred_q):
+def predict_loop(
+    model: Detector,
+    frame_q: Queue[Tuple[int, ImageCV]],
+    pred_q: Queue[Tuple[int, List[Prediction]]],
+):
     while True:
         frame_id, frame = frame_q.get()
         old_frame_id = frame_id
@@ -123,8 +133,8 @@ def main():
     obj = VideoLoop(video_producer=input_video)
     # obj.process(det)
 
-    frame_queue = Queue(maxsize=1000)
-    predictions_queue = Queue(maxsize=1000)
+    frame_queue: Queue[Tuple[int, ImageCV]] = Queue(maxsize=1000)
+    predictions_queue: Queue[Tuple[int, List[Prediction]]] = Queue(maxsize=1000)
 
     # daemon=True is for killing the thread if main reach the end or exit
     loop = threading.Thread(
