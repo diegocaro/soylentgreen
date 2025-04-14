@@ -65,20 +65,31 @@ def draw_box_with_label(
     text_width += border
     text_height += border
 
+    padding = 5
     # Draw filled rectangle for text background
+    top_left = (x1, y1 - text_height - padding)
+    if top_left[1] < text_height:
+        # If the rectangle goes above the image, adjust the position
+        top_left = (x1, y1 + text_height + padding)
+
     cv2.rectangle(
         frame,
-        (x1, y1 - text_height - 5),  # Top-left corner
+        top_left,  # Top-left corner
         (x1 + text_width, y1),  # Bottom-right corner
         box_color,
         -1,  # Filled rectangle
     )
 
+    top_left_text = (x1, y1 - padding)
+    if top_left_text[1] < text_height:
+        # If the text goes above the image, adjust the position
+        top_left_text = (x1, y1 + text_height)
+
     # Draw text
     cv2.putText(
         frame,
         label_text,
-        (x1, y1 - 5),  # Position slightly above box
+        top_left_text,  # Position slightly above box
         text_params["fontFace"],
         text_params["fontScale"],
         text_color,
