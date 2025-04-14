@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterator
 
-from .types import Image
+from .types import ImageCV
 from .video_reader import VideoFrame, VideoMetadata, VideoReader
 
 
@@ -37,7 +37,7 @@ class Clip:
     def height(self) -> int:
         return self._reader.height
 
-    def read_frame(self) -> Image:
+    def read_frame(self) -> ImageCV:
         return self._reader.read_frame()
 
     def frames(self, buffer_size: int = 1) -> Iterator[VideoFrame]:

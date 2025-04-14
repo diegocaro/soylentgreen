@@ -4,7 +4,7 @@ from typing import Dict, List, Tuple
 import cv2
 from torch import Tensor
 
-from aqara_video.core.types import Image
+from aqara_video.core.types import ImageCV
 
 
 @dataclass
@@ -24,7 +24,7 @@ class Prediction:
 
 
 def draw_box_with_label(
-    frame: Image,
+    frame: ImageCV,
     box: Box,
     label: str,
     score: float,
@@ -87,8 +87,8 @@ def draw_box_with_label(
 
 
 def draw_boxes(
-    frame: Image, predictions: List[Prediction], threshold: float = 0.5
-) -> Image:
+    frame: ImageCV, predictions: List[Prediction], threshold: float = 0.5
+) -> ImageCV:
     """
     Draw bounding boxes on an image based on object detection predictions.
 

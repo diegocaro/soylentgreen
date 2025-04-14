@@ -4,7 +4,8 @@ import cv2
 import torch
 from torchvision import models, transforms
 
-from aqara_video.core.types import Image
+from aqara_video.core.images import bgr_to_rgb
+from aqara_video.core.types import ImageCV
 from aqara_video.ml.utils import Prediction, to_predictions
 
 
@@ -43,14 +44,14 @@ class Detector:
         self.batch_size = batch_size
         # Pre-allocate the transform once
         self._transform = transforms.Compose([transforms.ToTensor()])
-        self.frame_buffer: List[Image] = []
+        self.frame_buffer: List[ImageCV] = []
         self.frame_ids_buffer: List[int] = []
 
     def transform(self) -> transforms.Compose:
         """Return the image transformation pipeline for preprocessing (legacy method)."""
         return self._transform
 
-    def preprocess(self, image: Image) -> torch.Tensor:
+    def preprocess(self, image: ImageCV) -> torch.Tensor:
         """
         Preprocess a single image for model input (legacy method).
 
@@ -61,11 +62,11 @@ class Detector:
             A tensor ready for model input
         """
         # Use the optimized preprocessing approach
-        rgb_frame = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        rgb_frame = bgr_to_rgb(image)
         image_tensor = self._transform(rgb_frame).to(self.device)
         return image_tensor
 
-    def preprocess_batch(self, frames: List[Image]) -> List[torch.Tensor]:
+    def preprocess_batch(self, frames: List[ImageCV]) -> List[torch.Tensor]:
         """
         Process multiple frames at once.
 
@@ -77,8 +78,8 @@ class Detector:
         """
         tensors = []
         for frame in frames:
-            # Convert BGR to RGB directly using numpy
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # Convert BGR to RGB using our centralized function
+            rgb_frame = bgr_to_rgb(frame)
             # Convert to tensor
             tensor = self._transform(rgb_frame).to(self.device)
             tensors.append(tensor)
@@ -107,7 +108,7 @@ class Detector:
             return to_predictions(predictions, self.labels)
 
     def predict_batch(
-        self, frame_ids: List[int], frames: List[Image]
+        self, frame_ids: List[int], frames: List[ImageCV]
     ) -> List[Tuple[int, List[Dict[str, Any]]]]:
         """
         Predict on a batch of frames.
@@ -141,7 +142,7 @@ class Detector:
 
         return results
 
-    def add_to_batch(self, frame_id: int, frame: Image) -> List[Prediction]:
+    def add_to_batch(self, frame_id: int, frame: ImageCV) -> List[Prediction]:
         """
         Add a frame to the batch buffer.
 
