@@ -3,7 +3,6 @@ from pathlib import Path
 from queue import Queue
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-import cv2
 import torch
 from IPython.display import display
 from ipywidgets import (
@@ -20,6 +19,7 @@ from ipywidgets import (
 
 from aqara_video.core.clip import Clip
 from aqara_video.core.factory import TimelineFactory
+from aqara_video.core.images import encode_to_jpeg
 from aqara_video.ml.detector import Detector
 from aqara_video.ml.utils import draw_boxes
 from aqara_video.providers.aqara import AqaraProvider
@@ -187,8 +187,7 @@ class VideoProcessor:
                     )
 
                 # Encode the frame as JPEG
-                _, jpeg = cv2.imencode(".jpg", current_frame)
-                jpeg_bytes = jpeg.tobytes()
+                jpeg_bytes = encode_to_jpeg(current_frame)
 
                 # Signal to the UI that a new frame is available
                 if self.on_frame_ready is not None:

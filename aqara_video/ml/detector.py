@@ -4,6 +4,7 @@ import cv2
 import torch
 from torchvision import models, transforms
 
+from aqara_video.core.images import bgr_to_rgb
 from aqara_video.core.types import ImageCV
 from aqara_video.ml.utils import Prediction, to_predictions
 
@@ -61,7 +62,7 @@ class Detector:
             A tensor ready for model input
         """
         # Use the optimized preprocessing approach
-        rgb_frame = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        rgb_frame = bgr_to_rgb(image)
         image_tensor = self._transform(rgb_frame).to(self.device)
         return image_tensor
 
@@ -77,8 +78,8 @@ class Detector:
         """
         tensors = []
         for frame in frames:
-            # Convert BGR to RGB directly using numpy
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # Convert BGR to RGB using our centralized function
+            rgb_frame = bgr_to_rgb(frame)
             # Convert to tensor
             tensor = self._transform(rgb_frame).to(self.device)
             tensors.append(tensor)
