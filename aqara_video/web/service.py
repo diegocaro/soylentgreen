@@ -1,4 +1,6 @@
-from datetime import datetime, timedelta, timezone
+import json
+import logging
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from aqara_video.core.clip import Clip
@@ -9,14 +11,7 @@ from aqara_video.web.models import SeekResult, VideoSegment
 CLIP_DURATION = timedelta(minutes=1)
 
 
-def extract_timestamp(path: Path) -> datetime:
-    """Extract timestamp from Aqara path format."""
-    # lumi1.54ef44457bc9/20250207/082900.mp4 -> 2025-02-07 08:29:00 UTC
-    hhmmss = path.stem
-    yyyymmdd = path.parent.stem
-    timestamp = datetime.strptime(f"{yyyymmdd}{hhmmss}", "%Y%m%d%H%M%S")
-    timestamp_utc = timestamp.replace(tzinfo=timezone.utc)
-    return timestamp_utc.astimezone()  # Convert to local timezone
+logger = logging.getLogger(__name__)
 
 
 class Service:

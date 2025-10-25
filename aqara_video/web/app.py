@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -6,7 +7,11 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from aqara_video.web.service import Service
 
-VIDEO_DIR = Path("/Users/diegocaro/Projects/soylentgreen/sample-videos/aqara_video")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# VIDEO_DIR = Path("/Users/diegocaro/Projects/soylentgreen/sample-videos/aqara_video")
+VIDEO_DIR = Path("/Volumes/Cameras/aqara_video")
 
 app = FastAPI()
 
