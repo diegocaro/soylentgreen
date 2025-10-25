@@ -5,7 +5,7 @@
       <link href="https://unpkg.com/vis-timeline@7.7.0/styles/vis-timeline-graph2d.min.css" rel="stylesheet" />
       <style>
         body { font-family: sans-serif; padding: 20px; }
-        #timeline { border: 1px solid #ccc; height: 200px; cursor: pointer; position: relative; }
+        #timeline { border: 1px solid #ccc; height: 150px; cursor: pointer; position: relative; }
         video { margin-top: 20px; width: 720px; height: 405px; }
         #timeTooltip {
           position: absolute;
@@ -33,9 +33,9 @@
     </head>
     <body>
       <h2>NAS Video Timeline</h2>
-      <div style="margin-bottom: 15px;">
+      <div style="margin-bottom: 10px;">
         <label for="cameraSelect">Camera: </label>
-        <select id="cameraSelect" style="padding: 5px; min-width: 200px;">
+        <select id="cameraSelect">
           <option value="">Loading cameras...</option>
         </select>
       </div>
