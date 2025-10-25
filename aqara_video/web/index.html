@@ -86,6 +86,12 @@ async function loadCameras() {
 async function initTimeline() {
   if (!camera_id) return;
   
+  // Destroy existing timeline if it exists
+  if (window._sg_timeline) {
+    window._sg_timeline.destroy();
+    window._sg_timeline = null;
+  }
+  
   const res = await fetch('/list?camera_id=' + encodeURIComponent(camera_id));
   const clips = await res.json();
   const items = clips.map((c, i) => ({
