@@ -1,7 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 
 from aqara_video.web.service import Service
@@ -12,7 +12,7 @@ app = FastAPI()
 
 
 def get_service() -> Service:
-    return Service(base_path=VIDEO_DIR)
+    return Service(root_dir=VIDEO_DIR)
 
 
 @app.get("/")
@@ -20,10 +20,14 @@ def index():
     return FileResponse("index.html")
 
 
+@app.get("/cameras")
+def list_cameras(service: Service = Depends(get_service)):
+    return service.list_cameras()
+
+
 @app.get("/list")
-def list_videos(service: Service = Depends(get_service)):
-    clips = service.list_videos()
-    return JSONResponse(clips)
+def list_videos(camera_id: str, service: Service = Depends(get_service)):
+    return service.list_videos(camera_id=camera_id)
 
 
 @app.get("/video")
@@ -33,9 +37,9 @@ def get_video(path: str, service: Service = Depends(get_service)):
 
 
 @app.get("/seek")
-def seek(time: str = Query(...), service: Service = Depends(get_service)):
+def seek(camera_id: str, time: str, service: Service = Depends(get_service)):
     target = datetime.fromisoformat(time)
-    result = service.seek(target)
+    result = service.seek(camera_id, target)
     if result:
-        return JSONResponse(result)
+        return result
     return JSONResponse({"error": "no clip found"}, status_code=404)

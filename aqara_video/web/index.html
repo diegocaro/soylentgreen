@@ -44,8 +44,10 @@
       </div>
 
 <script>
+const camera_id = 'lumi1.54ef44603857'; // hardcoded for now
+
 async function initTimeline() {
-  const res = await fetch('/list');
+  const res = await fetch('/list?camera_id=' + encodeURIComponent(camera_id));
   const clips = await res.json();
   const items = clips.map((c, i) => ({
     id: i,
@@ -158,7 +160,7 @@ async function initTimeline() {
     const props = timeline.getEventProperties(event);
     if (!props.time) return;
     const t = props.time.toISOString();
-    const resp = await fetch('/seek?time=' + encodeURIComponent(t));
+    const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id));
     if (!resp.ok) return;
     const { path, offset } = await resp.json();
 

@@ -1,6 +1,11 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from aqara_video.core.clip import Clip
+from aqara_video.core.factory import TimelineFactory
+from aqara_video.providers.aqara import AqaraProvider
+from aqara_video.web.models import SeekResult, VideoSegment
+
 CLIP_DURATION = timedelta(minutes=1)
 
 
@@ -15,42 +20,49 @@ def extract_timestamp(path: Path) -> datetime:
 
 
 class Service:
-    def __init__(self, base_path: Path):
-        self._base_path = base_path
+    def __init__(self, root_dir: Path):
+        self._root_dir = root_dir
 
-    def list_videos(self) -> list[dict]:
-        clips = []
-        for f in self._base_path.rglob("*.mp4"):
-            start = extract_timestamp(f)
-            if not start:
-                continue
+    def list_cameras(self) -> list[str]:
+        cameras = AqaraProvider.cameras_in_dir(self._root_dir)
+        return cameras
+
+    def list_videos(self, camera_id: str) -> list[VideoSegment]:
+        timeline = TimelineFactory.create_timeline(self._root_dir / camera_id)
+
+        def transform(clip: Clip) -> VideoSegment:
+            start = clip.timestamp
             end = start + CLIP_DURATION
-            clips.append(
-                {
-                    "name": f.name,
-                    "start": start.isoformat(),
-                    "end": end.isoformat(),
-                    "path": str(f.relative_to(self._base_path)),
-                }
+            return VideoSegment(
+                name=clip.path.name,
+                start=start.isoformat(),
+                end=end.isoformat(),
+                path=str(clip.path.relative_to(self._root_dir)),
             )
-        clips.sort(key=lambda x: x["start"])
-        return clips
+
+        ans = [transform(clip) for clip in timeline.clips]
+        return ans
 
     def get_video_path(self, relative_path: str) -> Path:
-        full_path = self._base_path / relative_path
-        if not full_path.resolve().is_relative_to(self._base_path.resolve()):
+        full_path = self._root_dir / relative_path
+        if not full_path.resolve().is_relative_to(self._root_dir.resolve()):
             raise ValueError("Invalid video path")
         return full_path
 
-    def seek(self, target: datetime) -> dict | None:
+    def seek(self, camera_id: str, target: datetime) -> SeekResult | None:
         """
         Given an absolute time (ISO string), find which clip covers it and the offset in seconds.
         """
-        for f in self._base_path.rglob("*.mp4"):
-            start = extract_timestamp(f)
-            if not start:
-                continue
+        timeline = TimelineFactory.create_timeline(self._root_dir / camera_id)
+
+        for clip in timeline.clips:
+            start = clip.timestamp
             end = start + CLIP_DURATION
             if start <= target < end:
                 offset = (target - start).total_seconds()
-                return {"path": str(f.relative_to(self._base_path)), "offset": offset}
+                return SeekResult(
+                    path=str(clip.path.relative_to(self._root_dir)),
+                    offset=offset,
+                )
+
+        return None
