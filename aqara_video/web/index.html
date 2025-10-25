@@ -33,6 +33,12 @@
     </head>
     <body>
       <h2>NAS Video Timeline</h2>
+      <div style="margin-bottom: 15px;">
+        <label for="cameraSelect">Camera: </label>
+        <select id="cameraSelect" style="padding: 5px; min-width: 200px;">
+          <option value="">Loading cameras...</option>
+        </select>
+      </div>
       <div style="position: relative;">
         <div id="timeline"></div>
         <div id="scrubLine"></div>
@@ -44,9 +50,42 @@
       </div>
 
 <script>
-const camera_id = 'lumi1.54ef44603857'; // hardcoded for now
+let camera_id = null;
+
+async function loadCameras() {
+  const res = await fetch('/cameras');
+  const cameras = await res.json();
+  const select = document.getElementById('cameraSelect');
+  select.innerHTML = '';
+  
+  if (cameras.length === 0) {
+    select.innerHTML = '<option value="">No cameras found</option>';
+    return null;
+  }
+  
+  cameras.forEach(cam => {
+    const option = document.createElement('option');
+    option.value = cam;
+    option.textContent = cam;
+    select.appendChild(option);
+  });
+  
+  // Select first camera by default
+  camera_id = cameras[0];
+  select.value = camera_id;
+  
+  // Handle camera change
+  select.addEventListener('change', (e) => {
+    camera_id = e.target.value;
+    initTimeline();
+  });
+  
+  return camera_id;
+}
 
 async function initTimeline() {
+  if (!camera_id) return;
+  
   const res = await fetch('/list?camera_id=' + encodeURIComponent(camera_id));
   const clips = await res.json();
   const items = clips.map((c, i) => ({
@@ -194,7 +233,12 @@ async function initTimeline() {
     await loadAndPlay(nextClip.path, 0, next);
   });
 }
-initTimeline();
+
+// Initialize app
+(async () => {
+  await loadCameras();
+  await initTimeline();
+})();
 </script>
     </body>
     </html>
