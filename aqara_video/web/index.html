@@ -1,0 +1,199 @@
+    <html>
+    <head>
+      <title>NAS Timeline Viewer</title>
+      <script src="https://unpkg.com/vis-timeline@7.7.0/standalone/umd/vis-timeline-graph2d.min.js"></script>
+      <link href="https://unpkg.com/vis-timeline@7.7.0/styles/vis-timeline-graph2d.min.css" rel="stylesheet" />
+      <style>
+        body { font-family: sans-serif; padding: 20px; }
+        #timeline { border: 1px solid #ccc; height: 200px; cursor: pointer; position: relative; }
+        video { margin-top: 20px; width: 720px; height: 405px; }
+        #timeTooltip {
+          position: absolute;
+          background: rgba(0, 0, 0, 0.8);
+          color: white;
+          padding: 5px 10px;
+          border-radius: 4px;
+          font-size: 12px;
+          pointer-events: none;
+          display: none;
+          z-index: 1000;
+          white-space: nowrap;
+        }
+        #scrubLine {
+          position: absolute;
+          width: 2px;
+          background: rgba(255, 0, 0, 0.7);
+          pointer-events: none;
+          display: none;
+          z-index: 999;
+          top: 0;
+          bottom: 0;
+        }
+      </style>
+    </head>
+    <body>
+      <h2>NAS Video Timeline</h2>
+      <div style="position: relative;">
+        <div id="timeline"></div>
+        <div id="scrubLine"></div>
+        <div id="timeTooltip"></div>
+      </div>
+      <div id="playerContainer" style="position:relative; width:720px; height:405px;">
+        <video id="playerA" controls playsinline style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:2; transition: opacity 300ms;" ></video>
+        <video id="playerB" controls playsinline style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:1; transition: opacity 300ms;" ></video>
+      </div>
+
+<script>
+async function initTimeline() {
+  const res = await fetch('/list');
+  const clips = await res.json();
+  const items = clips.map((c, i) => ({
+    id: i,
+    content: c.name,
+    start: c.start,
+    end: c.end
+  }));
+
+  const container = document.getElementById('timeline');
+  const tooltip = document.getElementById('timeTooltip');
+  const scrubLine = document.getElementById('scrubLine');
+  
+  const timeline = new vis.Timeline(container, items, {
+    selectable: true,
+    zoomMin: 1000 * 60 * 5,
+    zoomMax: 1000 * 60 * 60 * 24,
+    stack: false
+  });
+
+  // Click anywhere on the timeline
+  // store clips globally so we can advance to next
+  window._sg_clips = clips;
+  window._sg_currentIndex = null;
+
+  const playerA = document.getElementById('playerA');
+  const playerB = document.getElementById('playerB');
+  let active = 'A'; // which player is currently visible/active
+
+  function activePlayer() { return active === 'A' ? playerA : playerB; }
+  function inactivePlayer() { return active === 'A' ? playerB : playerA; }
+
+  // helper to load into the inactive player, seek when metadata is ready, play and then swap
+  async function loadAndPlay(path, offsetSeconds, setActiveIndex) {
+    const target = inactivePlayer();
+    target.pause();
+    target.removeAttribute('src');
+    target.src = '/video?path=' + encodeURIComponent(path);
+
+    const onMeta = function() {
+      // clamp offset
+      const seek = Math.max(0, Math.min(offsetSeconds || 0, target.duration || 0));
+      
+      // Wait for seek to complete before playing
+      const onSeeked = function() {
+        target.removeEventListener('seeked', onSeeked);
+        
+        const onPlaying = function() {
+          // bring target on top
+          if (active === 'A') {
+            playerB.style.zIndex = 3;
+            playerA.style.zIndex = 1;
+          } else {
+            playerA.style.zIndex = 3;
+            playerB.style.zIndex = 1;
+          }
+          // update active flag
+          active = (target === playerA) ? 'A' : 'B';
+          // pause the now inactive one
+          const nowInactive = inactivePlayer();
+          try { nowInactive.pause(); } catch (e) {}
+          target.removeEventListener('playing', onPlaying);
+        };
+        target.addEventListener('playing', onPlaying);
+        target.play().catch(() => {/* autoplay may be blocked if not user-initiated */});
+      };
+      
+      target.addEventListener('seeked', onSeeked);
+      try { target.currentTime = seek; } catch (e) {}
+      target.removeEventListener('loadedmetadata', onMeta);
+    };
+    target.addEventListener('loadedmetadata', onMeta);
+  }
+
+  // Format time for display
+  function formatTime(date) {
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const seconds = date.getSeconds().toString().padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+  }
+
+  // Handle mouse move over timeline for scrubbing preview
+  container.addEventListener('mousemove', (event) => {
+    const props = timeline.getEventProperties(event);
+    if (props.time) {
+      const timeDate = new Date(props.time);
+      const rect = container.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      
+      // Show tooltip with time
+      tooltip.textContent = formatTime(timeDate);
+      tooltip.style.display = 'block';
+      tooltip.style.left = `${event.clientX - rect.left + 10}px`;
+      tooltip.style.top = `${event.clientY - rect.top - 30}px`;
+      
+      // Show scrub line
+      scrubLine.style.display = 'block';
+      scrubLine.style.left = `${mouseX}px`;
+    }
+  });
+
+  // Hide tooltip and scrub line when mouse leaves
+  container.addEventListener('mouseleave', () => {
+    tooltip.style.display = 'none';
+    scrubLine.style.display = 'none';
+  });
+
+  // Click on timeline to seek
+  container.onclick = async (event) => {
+    const props = timeline.getEventProperties(event);
+    if (!props.time) return;
+    const t = props.time.toISOString();
+    const resp = await fetch('/seek?time=' + encodeURIComponent(t));
+    if (!resp.ok) return;
+    const { path, offset } = await resp.json();
+
+    // find index in our clips list
+    const idx = clips.findIndex(c => c.path === path);
+    if (idx !== -1) window._sg_currentIndex = idx;
+
+    await loadAndPlay(path, offset || 0, idx);
+  };
+
+  // when the active clip finishes, try to play the next one using the double-buffer approach
+  playerA.addEventListener('ended', async () => {
+    if (active !== 'A') return; // only respond if A is active
+    const idx = window._sg_currentIndex;
+    if (idx === null) return;
+    const next = idx + 1;
+    if (next >= clips.length) return;
+    window._sg_currentIndex = next;
+    const nextClip = clips[next];
+    await loadAndPlay(nextClip.path, 0, next);
+  });
+
+  playerB.addEventListener('ended', async () => {
+    if (active !== 'B') return; // only respond if B is active
+    const idx = window._sg_currentIndex;
+    if (idx === null) return;
+    const next = idx + 1;
+    if (next >= clips.length) return;
+    window._sg_currentIndex = next;
+    const nextClip = clips[next];
+    await loadAndPlay(nextClip.path, 0, next);
+  });
+}
+initTimeline();
+</script>
+    </body>
+    </html>
+    
