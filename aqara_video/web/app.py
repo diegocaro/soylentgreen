@@ -1,12 +1,13 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 app = FastAPI()
 VIDEO_DIR = Path("/Users/diegocaro/Projects/soylentgreen/sample-videos/aqara_video")
+CLIP_DURATION = timedelta(minutes=1)
 
 
 def extract_timestamp(path: Path) -> datetime:
@@ -36,35 +37,117 @@ def index():
     <body>
       <h2>NAS Video Timeline</h2>
       <div id="timeline"></div>
-      <video id="player" controls></video>
+      <div id="playerContainer" style="position:relative; width:720px; height:405px;">
+        <video id="playerA" controls playsinline style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:2; transition: opacity 300ms;" ></video>
+        <video id="playerB" controls playsinline style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:1; transition: opacity 300ms;" ></video>
+      </div>
 
-      <script>
-        async function loadTimeline() {
-          const res = await fetch('/list');
-          const files = await res.json();
-          const items = files.map((f, i) => ({
-            id: i,
-            content: f.name,
-            start: f.timestamp,
-            path: f.path
-          }));
+<script>
+async function initTimeline() {
+  const res = await fetch('/list');
+  const clips = await res.json();
+  const items = clips.map((c, i) => ({
+    id: i,
+    content: c.name,
+    start: c.start,
+    end: c.end
+  }));
 
-          const container = document.getElementById('timeline');
-          const timeline = new vis.Timeline(container, items, {
-            zoomMin: 1000 * 60 * 5, // 5 min
-            zoomMax: 1000 * 60 * 60 * 24,
-            stack: false
-          });
+  const container = document.getElementById('timeline');
+  const timeline = new vis.Timeline(container, items, {
+    selectable: true,
+    zoomMin: 1000 * 60 * 5,
+    zoomMax: 1000 * 60 * 60 * 24,
+    stack: false
+  });
 
-          timeline.on('select', function (props) {
-            if (props.items.length > 0) {
-              const item = items.find(i => i.id === props.items[0]);
-              document.getElementById('player').src = '/video?path=' + encodeURIComponent(item.path);
-            }
-          });
+  // Click anywhere on the timeline
+  // store clips globally so we can advance to next
+  window._sg_clips = clips;
+  window._sg_currentIndex = null;
+
+  const playerA = document.getElementById('playerA');
+  const playerB = document.getElementById('playerB');
+  let active = 'A'; // which player is currently visible/active
+
+  function activePlayer() { return active === 'A' ? playerA : playerB; }
+  function inactivePlayer() { return active === 'A' ? playerB : playerA; }
+
+  // helper to load into the inactive player, seek when metadata is ready, play and then swap
+  async function loadAndPlay(path, offsetSeconds, setActiveIndex) {
+    const target = inactivePlayer();
+    target.pause();
+    target.removeAttribute('src');
+    target.src = '/video?path=' + encodeURIComponent(path);
+
+    const onMeta = function() {
+      // clamp offset
+      const seek = Math.max(0, Math.min(offsetSeconds || 0, target.duration || 0));
+      try { target.currentTime = seek; } catch (e) {}
+      // start playing hidden player; once it starts, swap z-index so it's visible
+      const onPlaying = function() {
+        // bring target on top
+        if (active === 'A') {
+          playerB.style.zIndex = 3;
+          playerA.style.zIndex = 1;
+        } else {
+          playerA.style.zIndex = 3;
+          playerB.style.zIndex = 1;
         }
-        loadTimeline();
-      </script>
+        // update active flag
+        active = (target === playerA) ? 'A' : 'B';
+        // pause the now inactive one
+        const nowInactive = inactivePlayer();
+        try { nowInactive.pause(); } catch (e) {}
+        target.removeEventListener('playing', onPlaying);
+      };
+      target.addEventListener('playing', onPlaying);
+      target.play().catch(() => {/* autoplay may be blocked if not user-initiated */});
+      target.removeEventListener('loadedmetadata', onMeta);
+    };
+    target.addEventListener('loadedmetadata', onMeta);
+  }
+
+  container.onclick = async (event) => {
+    const props = timeline.getEventProperties(event);
+    if (!props.time) return;
+    const t = props.time.toISOString();
+    const resp = await fetch('/seek?time=' + encodeURIComponent(t));
+    if (!resp.ok) return;
+    const { path, offset } = await resp.json();
+
+    // find index in our clips list
+    const idx = clips.findIndex(c => c.path === path);
+    if (idx !== -1) window._sg_currentIndex = idx;
+
+    await loadAndPlay(path, offset || 0, idx);
+  };
+
+  // when the active clip finishes, try to play the next one using the double-buffer approach
+  playerA.addEventListener('ended', async () => {
+    if (active !== 'A') return; // only respond if A is active
+    const idx = window._sg_currentIndex;
+    if (idx === null) return;
+    const next = idx + 1;
+    if (next >= clips.length) return;
+    window._sg_currentIndex = next;
+    const nextClip = clips[next];
+    await loadAndPlay(nextClip.path, 0, next);
+  });
+
+  playerB.addEventListener('ended', async () => {
+    if (active !== 'B') return; // only respond if B is active
+    const idx = window._sg_currentIndex;
+    if (idx === null) return;
+    const next = idx + 1;
+    if (next >= clips.length) return;
+    window._sg_currentIndex = next;
+    const nextClip = clips[next];
+    await loadAndPlay(nextClip.path, 0, next);
+  });
+}
+initTimeline();
+</script>
     </body>
     </html>
     """
@@ -73,22 +156,45 @@ def index():
 
 @app.get("/list")
 def list_videos():
-    data = []
+    clips = []
     for f in VIDEO_DIR.rglob("*.mp4"):
-        ts = extract_timestamp(f)
-        if ts:
-            data.append(
-                {
-                    "name": f.name,
-                    "timestamp": ts.isoformat(),
-                    "path": str(f.relative_to(VIDEO_DIR)),
-                }
-            )
-    data.sort(key=lambda x: x["timestamp"])
-    return JSONResponse(data)
+        start = extract_timestamp(f)
+        if not start:
+            continue
+        end = start + CLIP_DURATION
+        clips.append(
+            {
+                "name": f.name,
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "path": str(f.relative_to(VIDEO_DIR)),
+            }
+        )
+    clips.sort(key=lambda x: x["start"])
+    return JSONResponse(clips)
 
 
 @app.get("/video")
 def get_video(path: str):
     full_path = VIDEO_DIR / path
     return FileResponse(full_path)
+
+
+@app.get("/seek")
+def seek(time: str = Query(...)):
+    """
+    Given an absolute time (ISO string), find which clip covers it and the offset in seconds.
+    """
+    target = datetime.fromisoformat(time)
+    candidates = []
+    for f in VIDEO_DIR.rglob("*.mp4"):
+        start = extract_timestamp(f)
+        if not start:
+            continue
+        end = start + CLIP_DURATION
+        if start <= target < end:
+            offset = (target - start).total_seconds()
+            return JSONResponse(
+                {"path": str(f.relative_to(VIDEO_DIR)), "offset": offset}
+            )
+    return JSONResponse({"error": "no clip found"}, status_code=404)
