@@ -110,6 +110,7 @@ async function initTimeline() {
   // store clips globally so we can advance to next
   window._sg_clips = clips;
   window._sg_currentIndex = null;
+  window._sg_timeline = timeline;
 
   const playerA = document.getElementById('playerA');
   const playerB = document.getElementById('playerB');
@@ -147,6 +148,10 @@ async function initTimeline() {
           // pause the now inactive one
           const nowInactive = inactivePlayer();
           try { nowInactive.pause(); } catch (e) {}
+          // highlight the current clip on timeline
+          if (setActiveIndex !== undefined && window._sg_timeline) {
+            window._sg_timeline.setSelection(setActiveIndex);
+          }
           target.removeEventListener('playing', onPlaying);
         };
         target.addEventListener('playing', onPlaying);
