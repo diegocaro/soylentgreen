@@ -36,13 +36,12 @@ class AqaraProvider(CameraProvider):
 
     def extract_timestamp(self, path: Path) -> datetime:
         """Extract timestamp from Aqara path format."""
-        # lumi1.54ef44457bc9/20250207/082900.mp4 -> 2025-02-07 08:29:00 UTC
+        # lumi1.54ef44457bc9/20250207/082900.mp4 -> 2025-02-07 08:29:00 UTC or local timezone
+        # depending on the camera/home settings in Aqara app
         hhmmss = path.stem
         yyyymmdd = path.parent.stem
         timestamp = datetime.strptime(f"{yyyymmdd}{hhmmss}", "%Y%m%d%H%M%S")
         return timestamp.astimezone()
-        # timestamp_utc = timestamp.replace(tzinfo=timezone.utc)
-        # return timestamp_utc.astimezone()  # Convert to local timezone
 
     def _extract_camera_id_from_path(self, path: Path) -> str:
         """Extract camera ID from Aqara path format."""
