@@ -65,13 +65,13 @@ async function loadCameras() {
   
   cameras.forEach(cam => {
     const option = document.createElement('option');
-    option.value = cam;
-    option.textContent = cam;
+    option.value = cam.id;
+    option.textContent = cam.name;
     select.appendChild(option);
   });
   
   // Select first camera by default
-  camera_id = cameras[0];
+  camera_id = cameras[0].id;
   select.value = camera_id;
   
   // Handle camera change
