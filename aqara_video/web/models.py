@@ -8,6 +8,14 @@ class VideoSegment(BaseModel):
     path: str  # Relative path to the video file
 
 
+class VideoList(BaseModel):
+    segments: list[VideoSegment]
+
+
 class SeekResult(BaseModel):
     path: str  # Relative path to the video file
     offset: float  # Offset in seconds within the video file
+
+
+class ScanResult(BaseModel):
+    camera: dict[str, VideoList]

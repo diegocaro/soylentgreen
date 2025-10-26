@@ -1,23 +1,24 @@
 import logging
 from datetime import datetime
-from pathlib import Path
 
 from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 
+from aqara_video.web.config import SCAN_RESULT_FILE, VIDEO_DIR
+from aqara_video.web.models import ScanResult
 from aqara_video.web.service import Service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# VIDEO_DIR = Path("/Users/diegocaro/Projects/soylentgreen/sample-videos/aqara_video")
-VIDEO_DIR = Path("/Volumes/Cameras/aqara_video")
 
 app = FastAPI()
 
 
 def get_service() -> Service:
-    return Service(root_dir=VIDEO_DIR)
+    scan_result = ScanResult.model_validate_json(SCAN_RESULT_FILE.read_text())
+
+    return Service(root_dir=VIDEO_DIR, scan_result=scan_result)
 
 
 @app.get("/")

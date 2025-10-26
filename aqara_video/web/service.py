@@ -1,42 +1,23 @@
-import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
-from aqara_video.core.clip import Clip
-from aqara_video.core.factory import TimelineFactory
-from aqara_video.providers.aqara import AqaraProvider
-from aqara_video.web.models import SeekResult, VideoSegment
-
-CLIP_DURATION = timedelta(minutes=1)
-
+from aqara_video.web.models import ScanResult, SeekResult, VideoSegment
 
 logger = logging.getLogger(__name__)
 
 
 class Service:
-    def __init__(self, root_dir: Path):
+    def __init__(self, root_dir: Path, scan_result: ScanResult):
         self._root_dir = root_dir
+        self._scan_result = scan_result
 
     def list_cameras(self) -> list[str]:
-        cameras = AqaraProvider.cameras_in_dir(self._root_dir)
-        return cameras
+        return list(self._scan_result.camera.keys())
 
     def list_videos(self, camera_id: str) -> list[VideoSegment]:
-        timeline = TimelineFactory.create_timeline(self._root_dir / camera_id)
-
-        def transform(clip: Clip) -> VideoSegment:
-            start = clip.timestamp
-            end = start + CLIP_DURATION
-            return VideoSegment(
-                name=clip.path.name,
-                start=start.isoformat(),
-                end=end.isoformat(),
-                path=str(clip.path.relative_to(self._root_dir)),
-            )
-
-        ans = [transform(clip) for clip in timeline.clips]
-        return ans
+        camera = self._scan_result.camera[camera_id]
+        return camera.segments
 
     def get_video_path(self, relative_path: str) -> Path:
         full_path = self._root_dir / relative_path
@@ -48,15 +29,26 @@ class Service:
         """
         Given an absolute time (ISO string), find which clip covers it and the offset in seconds.
         """
-        timeline = TimelineFactory.create_timeline(self._root_dir / camera_id)
+        # timeline = TimelineFactory.create_timeline(self._root_dir / camera_id)
+        # for clip in timeline.clips:
+        #     start = clip.timestamp
+        #     end = start + CLIP_DURATION
+        #     if start <= target < end:
+        #         offset = (target - start).total_seconds()
+        #         return SeekResult(
+        #             path=str(clip.path.relative_to(self._root_dir)),
+        #             offset=offset,
+        #         )
+        # TODO: Preprocess the datetime fromisoformat
 
-        for clip in timeline.clips:
-            start = clip.timestamp
-            end = start + CLIP_DURATION
+        camera = self._scan_result.camera[camera_id]
+        for segment in camera.segments:
+            start = datetime.fromisoformat(segment.start)
+            end = datetime.fromisoformat(segment.end)
             if start <= target < end:
                 offset = (target - start).total_seconds()
                 return SeekResult(
-                    path=str(clip.path.relative_to(self._root_dir)),
+                    path=segment.path,
                     offset=offset,
                 )
 
