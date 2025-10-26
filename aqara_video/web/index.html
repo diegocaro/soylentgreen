@@ -5,9 +5,22 @@
       <link href="https://unpkg.com/vis-timeline@7.7.0/styles/vis-timeline-graph2d.min.css" rel="stylesheet" />
       <style>
         body { font-family: sans-serif; padding: 20px; }
-        #timeline { border: 1px solid #ccc; height: 150px; cursor: pointer; position: relative; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .camera-selector { text-align: right; }
+        #overviewTimeline { border: 1px solid #ccc; height: 80px; cursor: pointer; position: relative; margin-bottom: 10px; background: #f5f5f5; }
+        #detailRangeIndicator {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          background: rgba(33, 150, 243, 0.2);
+          border-left: 2px solid rgba(33, 150, 243, 0.8);
+          border-right: 2px solid rgba(33, 150, 243, 0.8);
+          pointer-events: none;
+          z-index: 10;
+        }
+        #timeline { border: 1px solid #ccc; height: 100px; cursor: pointer; position: relative; }
         video { margin-top: 20px; width: 720px; height: 405px; }
-        #timeTooltip {
+        .timeTooltip {
           position: absolute;
           background: rgba(0, 0, 0, 0.8);
           color: white;
@@ -19,7 +32,7 @@
           z-index: 1000;
           white-space: nowrap;
         }
-        #scrubLine {
+        .scrubLine {
           position: absolute;
           width: 2px;
           background: rgba(255, 0, 0, 0.7);
@@ -29,20 +42,42 @@
           top: 0;
           bottom: 0;
         }
+        .availability-marker {
+          position: absolute;
+          bottom: 0;
+          height: 20px;
+          background: linear-gradient(180deg, rgba(76, 175, 80, 0.3), rgba(76, 175, 80, 0.6));
+          pointer-events: none;
+        }
+        .timeline-label {
+          font-size: 11px;
+          color: #666;
+          margin-bottom: 3px;
+        }
       </style>
     </head>
     <body>
-      <h2>NAS Video Timeline</h2>
-      <div style="margin-bottom: 10px;">
-        <label for="cameraSelect">Camera: </label>
-        <select id="cameraSelect">
-          <option value="">Loading cameras...</option>
-        </select>
+      <div class="header">
+        <h2>NAS Video Timeline</h2>
+        <div class="camera-selector">
+          <label for="cameraSelect">Camera: </label>
+          <select id="cameraSelect">
+            <option value="">Loading cameras...</option>
+          </select>
+        </div>
       </div>
+      <div class="timeline-label">Overview (click to jump to date/time):</div>
+      <div style="position: relative;">
+        <div id="overviewTimeline"></div>
+        <div id="detailRangeIndicator"></div>
+        <div id="overviewScrubLine" class="scrubLine"></div>
+        <div id="overviewTooltip" class="timeTooltip"></div>
+      </div>
+      <div class="timeline-label">Detailed view:</div>
       <div style="position: relative;">
         <div id="timeline"></div>
-        <div id="scrubLine"></div>
-        <div id="timeTooltip"></div>
+        <div id="scrubLine" class="scrubLine"></div>
+        <div id="timeTooltip" class="timeTooltip"></div>
       </div>
       <div id="playerContainer" style="position:relative; width:720px; height:405px;">
         <video id="playerA" controls playsinline style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:2; transition: opacity 300ms;" ></video>
@@ -86,10 +121,14 @@ async function loadCameras() {
 async function initTimeline() {
   if (!camera_id) return;
   
-  // Destroy existing timeline if it exists
+  // Destroy existing timelines if they exist
   if (window._sg_timeline) {
     window._sg_timeline.destroy();
     window._sg_timeline = null;
+  }
+  if (window._sg_overviewTimeline) {
+    window._sg_overviewTimeline.destroy();
+    window._sg_overviewTimeline = null;
   }
   
   const res = await fetch('/list?camera_id=' + encodeURIComponent(camera_id));
@@ -101,6 +140,33 @@ async function initTimeline() {
     end: c.end
   }));
 
+  // Create overview timeline
+  const overviewContainer = document.getElementById('overviewTimeline');
+  const overviewTooltip = document.getElementById('overviewTooltip');
+  const overviewScrubLine = document.getElementById('overviewScrubLine');
+  
+  // Create simplified items for overview (group by day for better performance)
+  const overviewItems = items.map((item, i) => ({
+    id: 'overview_' + i,
+    content: '',
+    start: item.start,
+    end: item.end,
+    className: 'overview-item'
+  }));
+  
+  const overviewTimeline = new vis.Timeline(overviewContainer, overviewItems, {
+    selectable: false,
+    zoomMin: 1000 * 60 * 60 * 24, // 1 day minimum
+    zoomMax: 1000 * 60 * 60 * 24 * 365, // 1 year maximum
+    stack: false,
+    showCurrentTime: true,
+    showMajorLabels: true,
+    showMinorLabels: true
+  });
+  
+  window._sg_overviewTimeline = overviewTimeline;
+
+  // Create detailed timeline
   const container = document.getElementById('timeline');
   const tooltip = document.getElementById('timeTooltip');
   const scrubLine = document.getElementById('scrubLine');
@@ -109,10 +175,90 @@ async function initTimeline() {
     selectable: true,
     zoomMin: 1000 * 60 * 5,
     zoomMax: 1000 * 60 * 60 * 24,
-    stack: false
+    stack: false,
+    showCurrentTime: true
   });
 
-  // Click anywhere on the timeline
+  // Function to update the detail range indicator
+  function updateDetailRangeIndicator() {
+    const detailRange = timeline.getWindow();
+    const overviewRange = overviewTimeline.getWindow();
+    const indicator = document.getElementById('detailRangeIndicator');
+    const container = document.getElementById('overviewTimeline');
+    
+    const containerWidth = container.clientWidth;
+    const overviewSpan = overviewRange.end - overviewRange.start;
+    
+    const startOffset = (detailRange.start - overviewRange.start) / overviewSpan;
+    const endOffset = (detailRange.end - overviewRange.start) / overviewSpan;
+    
+    indicator.style.left = (startOffset * containerWidth) + 'px';
+    indicator.style.width = ((endOffset - startOffset) * containerWidth) + 'px';
+  }
+  
+  // Sync overview timeline with detailed timeline and update indicator
+  timeline.on('rangechange', () => {
+    updateDetailRangeIndicator();
+  });
+  
+  overviewTimeline.on('rangechange', () => {
+    updateDetailRangeIndicator();
+  });
+  
+  // Initial update
+  setTimeout(updateDetailRangeIndicator, 100);
+  
+  // Click on overview to jump to that time range and start playing
+  overviewContainer.onclick = async (event) => {
+    const props = overviewTimeline.getEventProperties(event);
+    if (!props.time) return;
+    
+    // Center the detailed timeline on the clicked time
+    const windowSize = 1000 * 60 * 60; // 1 hour window
+    const start = new Date(props.time.getTime() - windowSize / 2);
+    const end = new Date(props.time.getTime() + windowSize / 2);
+    timeline.setWindow(start, end, {animation: true});
+    
+    // Also seek to and play the video at that time
+    const t = props.time.toISOString();
+    const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id));
+    if (!resp.ok) return;
+    const { path, offset } = await resp.json();
+
+    // find index in our clips list
+    const idx = clips.findIndex(c => c.path === path);
+    if (idx !== -1) window._sg_currentIndex = idx;
+
+    await loadAndPlay(path, offset || 0, idx);
+  };
+  
+  // Handle mouse move over overview timeline
+  overviewContainer.addEventListener('mousemove', (event) => {
+    const props = overviewTimeline.getEventProperties(event);
+    if (props.time) {
+      const timeDate = new Date(props.time);
+      const rect = overviewContainer.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      
+      // Format date and time
+      const dateStr = timeDate.toLocaleDateString();
+      const timeStr = formatTime(timeDate);
+      
+      overviewTooltip.textContent = `${dateStr} ${timeStr}`;
+      overviewTooltip.style.display = 'block';
+      overviewTooltip.style.left = `${event.clientX - rect.left + 10}px`;
+      overviewTooltip.style.top = `${event.clientY - rect.top - 30}px`;
+      
+      overviewScrubLine.style.display = 'block';
+      overviewScrubLine.style.left = `${mouseX}px`;
+    }
+  });
+  
+  overviewContainer.addEventListener('mouseleave', () => {
+    overviewTooltip.style.display = 'none';
+    overviewScrubLine.style.display = 'none';
+  });
+
   // store clips globally so we can advance to next
   window._sg_clips = clips;
   window._sg_currentIndex = null;
