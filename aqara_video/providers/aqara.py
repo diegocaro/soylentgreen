@@ -40,8 +40,9 @@ class AqaraProvider(CameraProvider):
         hhmmss = path.stem
         yyyymmdd = path.parent.stem
         timestamp = datetime.strptime(f"{yyyymmdd}{hhmmss}", "%Y%m%d%H%M%S")
-        timestamp_utc = timestamp.replace(tzinfo=timezone.utc)
-        return timestamp_utc.astimezone()  # Convert to local timezone
+        return timestamp.astimezone()
+        # timestamp_utc = timestamp.replace(tzinfo=timezone.utc)
+        # return timestamp_utc.astimezone()  # Convert to local timezone
 
     def _extract_camera_id_from_path(self, path: Path) -> str:
         """Extract camera ID from Aqara path format."""
