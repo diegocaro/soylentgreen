@@ -227,8 +227,24 @@ async function initTimeline() {
 
     // find index in our clips list
     const idx = clips.findIndex(c => c.path === path);
+    
+    // Check if we're seeking within the currently playing video
+    if (idx !== -1 && idx === window._sg_currentIndex) {
+      const player = activePlayer();
+      const currentSrc = player.src;
+      const targetSrc = '/video?path=' + encodeURIComponent(path);
+      
+      // If same video is already loaded, just seek
+      if (currentSrc.includes(encodeURIComponent(path))) {
+        player.currentTime = offset || 0;
+        player.play().catch(() => {});
+        timeline.setSelection(idx);
+        return;
+      }
+    }
+    
+    // Different video, load it
     if (idx !== -1) window._sg_currentIndex = idx;
-
     await loadAndPlay(path, offset || 0, idx);
   };
   
@@ -362,8 +378,24 @@ async function initTimeline() {
 
     // find index in our clips list
     const idx = clips.findIndex(c => c.path === path);
+    
+    // Check if we're seeking within the currently playing video
+    if (idx !== -1 && idx === window._sg_currentIndex) {
+      const player = activePlayer();
+      const currentSrc = player.src;
+      const targetSrc = '/video?path=' + encodeURIComponent(path);
+      
+      // If same video is already loaded, just seek
+      if (currentSrc.includes(encodeURIComponent(path))) {
+        player.currentTime = offset || 0;
+        player.play().catch(() => {});
+        timeline.setSelection(idx);
+        return;
+      }
+    }
+    
+    // Different video, load it
     if (idx !== -1) window._sg_currentIndex = idx;
-
     await loadAndPlay(path, offset || 0, idx);
   };
 
