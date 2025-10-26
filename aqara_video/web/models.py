@@ -1,6 +1,11 @@
 from pydantic import BaseModel
 
 
+class CameraInfo(BaseModel):
+    id: str
+    name: str
+
+
 class VideoSegment(BaseModel):
     name: str
     start: str  # ISO formatted datetime string

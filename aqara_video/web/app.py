@@ -4,8 +4,8 @@ from datetime import datetime
 from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 
-from aqara_video.web.config import SCAN_RESULT_FILE, VIDEO_DIR
-from aqara_video.web.models import ScanResult
+from aqara_video.web.config import CAMERA_MAP, SCAN_RESULT_FILE, VIDEO_DIR
+from aqara_video.web.models import CameraInfo, ScanResult
 from aqara_video.web.service import Service
 
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +18,7 @@ app = FastAPI()
 def get_service() -> Service:
     scan_result = ScanResult.model_validate_json(SCAN_RESULT_FILE.read_text())
 
-    return Service(root_dir=VIDEO_DIR, scan_result=scan_result)
+    return Service(root_dir=VIDEO_DIR, scan_result=scan_result, camera_map=CAMERA_MAP)
 
 
 @app.get("/")
@@ -27,7 +27,7 @@ def index():
 
 
 @app.get("/cameras")
-def list_cameras(service: Service = Depends(get_service)):
+def list_cameras(service: Service = Depends(get_service)) -> list[CameraInfo]:
     return service.list_cameras()
 
 

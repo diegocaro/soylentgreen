@@ -2,18 +2,31 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from aqara_video.web.models import ScanResult, SeekResult, VideoSegment
+from aqara_video.web.models import CameraInfo, ScanResult, SeekResult, VideoSegment
 
 logger = logging.getLogger(__name__)
 
 
 class Service:
-    def __init__(self, root_dir: Path, scan_result: ScanResult):
+    def __init__(
+        self,
+        root_dir: Path,
+        scan_result: ScanResult,
+        camera_map: dict[str, str] | None = None,
+    ):
         self._root_dir = root_dir
         self._scan_result = scan_result
+        self._camera_map = camera_map or {}
 
-    def list_cameras(self) -> list[str]:
-        return list(self._scan_result.camera.keys())
+    def list_cameras(self) -> list[CameraInfo]:
+        def map_camera(camera_id: str) -> CameraInfo:
+            name = self._camera_map.get(camera_id, camera_id)
+            return CameraInfo(id=camera_id, name=name)
+
+        cameras = [
+            map_camera(camera_id) for camera_id in self._scan_result.camera.keys()
+        ]
+        return cameras
 
     def list_videos(self, camera_id: str) -> list[VideoSegment]:
         camera = self._scan_result.camera[camera_id]
