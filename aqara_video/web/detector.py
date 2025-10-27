@@ -1,5 +1,4 @@
 import logging
-import sys
 import time
 from pathlib import Path
 
@@ -50,11 +49,11 @@ class YellowBoxDetector:
 
     def timestamps(self, video_path: Path) -> list[float]:
         video = VideoReader(video_path)
-        logger.info(f"Processing video: {video_path}, duration: {video.duration:.2f}s")
+        logger.debug(f"Processing video: {video_path}, duration: {video.duration:.2f}s")
         timestamps: list[float] = []
         for videoframe in video.frames(frame_skip=self._frame_skip):
             if videoframe.frame_id % 100 == 0:
-                logger.info(
+                logger.debug(
                     f"Analyzing frame {videoframe.frame_id} at t={videoframe.t:.2f}s"
                 )
             if self.detect(videoframe.frame):
@@ -79,21 +78,22 @@ class YellowBoxDetector:
 
     def predict(self, video_path: Path) -> list[tuple[float, float]]:
         timestamps = self.timestamps(video_path)
-        logger.info(f"Detected {len(timestamps)} frames with yellow boxes")
+        logger.debug(f"Detected {len(timestamps)} frames with yellow boxes")
         intervals = self.intervals_from_timestamps(timestamps)
-        logger.info(f"Merged into {len(intervals)} intervals")
+        logger.debug(f"Merged into {len(intervals)} intervals")
         return intervals
 
 
 def test():
+    logging.basicConfig(level=logging.DEBUG)
     VIDEO_PATH = "/Volumes/Cameras/aqara_video/lumi1.54ef44603857/20251023/102559.mp4"
     detector = YellowBoxDetector()
     start_time = time.time()
     intervals = detector.predict(Path(VIDEO_PATH))
     end_time = time.time()
-    print(f"Processing time: {end_time - start_time:.2f} seconds")
+    logger.debug(f"Processing time: {end_time - start_time:.2f} seconds")
 
-    print("Detected yellow box intervals (seconds):")
+    logger.debug("Detected yellow box intervals (seconds):")
     for s, e in intervals:
         print(f"{s:.2f} → {e:.2f}")
 
