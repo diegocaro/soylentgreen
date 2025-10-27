@@ -132,6 +132,8 @@ class VideoReader:
         Args:
             clip: Either a Clip object or a path to a video file
         """
+        if not path.exists():
+            raise FileNotFoundError(f"Video file not found: {path}")
         self.path = path
         self._metadata: Optional[VideoMetadata] = None
 
@@ -144,7 +146,12 @@ class VideoReader:
             A dictionary containing video metadata
         """
         if self._metadata is None:
-            self._metadata = VideoMetadata.from_dict(ffmpeg.probe(str(self.path)))  # type: ignore
+            try:
+                self._metadata = VideoMetadata.from_dict(ffmpeg.probe(str(self.path)))  # type: ignore
+            except ffmpeg.Error as e:
+                raise RuntimeError(
+                    f"Failed to probe video file {self.path}: {e.stderr.decode()}"
+                ) from e
         return self._metadata
 
     @property
