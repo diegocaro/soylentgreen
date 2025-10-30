@@ -28,7 +28,7 @@ if __name__ == "__main__":
     yellow_box_detector = YellowBoxDetector()
     scan_result = ScanResult.model_validate_json(SCAN_RESULT_FILE.read_text())
 
-    for camera_id, video_list in scan_result.camera.items():
+    for camera_id, video_list in scan_result.cameras.items():
         logger.info(f"Processing camera: {camera_id}")
         for segment in video_list.segments:
             video_path = VIDEO_DIR / segment.path

@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 from aqara_video.web.config import SCAN_RESULT_FILE, VIDEO_DIR
 from aqara_video.web.models import ScanResult
@@ -17,7 +18,7 @@ if __name__ == "__main__":
         logger.info(f" - {camera}")
 
     scan = {camera: manager.scan_videos(camera) for camera in cameras}
-    result = ScanResult(camera=scan)
+    result = ScanResult(cameras=scan, scanned_at=datetime.now())
 
     with open(SCAN_RESULT_FILE, "w") as f:
         f.write(result.model_dump_json(indent=2))

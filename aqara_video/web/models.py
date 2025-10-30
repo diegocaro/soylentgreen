@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from datetime import datetime
+
+from pydantic import BaseModel
 
 
 class CameraInfo(BaseModel):
@@ -6,18 +8,11 @@ class CameraInfo(BaseModel):
     name: str
 
 
-class LabeledIntervalTimestamp(BaseModel):
-    label: str
-    start: str  # ISO formatted datetime string
-    end: str  # ISO formatted datetime string
-
-
 class VideoSegment(BaseModel):
     name: str
-    start: str  # ISO formatted datetime string
-    end: str  # ISO formatted datetime string
+    start: datetime
+    end: datetime
     path: str  # Relative path to the video file
-    intervals: list[LabeledIntervalTimestamp] = Field(default_factory=list)
 
 
 class VideoList(BaseModel):
@@ -30,7 +25,8 @@ class SeekResult(BaseModel):
 
 
 class ScanResult(BaseModel):
-    camera: dict[str, VideoList]
+    cameras: dict[str, VideoList]
+    scanned_at: datetime | None = None
 
 
 class LabeledInterval(BaseModel):
@@ -41,3 +37,26 @@ class LabeledInterval(BaseModel):
 
 class VideoDetectionSummary(BaseModel):
     detections: dict[str, list[LabeledInterval]]  # key: video segment path
+
+
+class IntervalTimestamp(BaseModel):
+    start: datetime
+    end: datetime
+
+    # @field_validator("end")
+    # def end_after_start(cls, v, info):
+    #     if "start" in info.data and v <= info.data["start"]:
+    #         raise ValueError("end must be after start")
+    #     return v
+
+
+class LabelTimeline(BaseModel):
+    intervals: list[IntervalTimestamp]
+
+
+class CameraLabels(BaseModel):
+    labels: dict[str, LabelTimeline]
+
+
+class LabelsByCamera(BaseModel):
+    cameras: dict[str, CameraLabels]

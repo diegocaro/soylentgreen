@@ -4,8 +4,13 @@ from datetime import datetime
 from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 
-from aqara_video.web.config import CAMERA_MAP, SCAN_RESULT_FILE, VIDEO_DIR
-from aqara_video.web.models import CameraInfo, ScanResult
+from aqara_video.web.config import (
+    CAMERA_MAP,
+    LABELS_TIMELINE_FILE,
+    SCAN_RESULT_FILE,
+    VIDEO_DIR,
+)
+from aqara_video.web.models import CameraInfo, CameraLabels, LabelsByCamera, ScanResult
 from aqara_video.web.service import Service
 
 logging.basicConfig(level=logging.INFO)
@@ -17,8 +22,15 @@ app = FastAPI()
 
 def get_service() -> Service:
     scan_result = ScanResult.model_validate_json(SCAN_RESULT_FILE.read_text())
-
-    return Service(root_dir=VIDEO_DIR, scan_result=scan_result, camera_map=CAMERA_MAP)
+    labels_timeline = LabelsByCamera.model_validate_json(
+        LABELS_TIMELINE_FILE.read_text()
+    )
+    return Service(
+        root_dir=VIDEO_DIR,
+        scan_result=scan_result,
+        labels_timeline=labels_timeline,
+        camera_map=CAMERA_MAP,
+    )
 
 
 @app.get("/")
@@ -49,3 +61,8 @@ def seek(camera_id: str, time: str, service: Service = Depends(get_service)):
     if result:
         return result
     return JSONResponse({"error": "no clip found"}, status_code=404)
+
+
+@app.get("/labels")
+def get_labels(camera_id: str, service: Service = Depends(get_service)) -> CameraLabels:
+    return service.get_labels_timeline(camera_id)

@@ -29,8 +29,8 @@ class ScanManager:
             end = start + CLIP_DURATION
             return VideoSegment(
                 name=clip.path.name,
-                start=start.isoformat(),
-                end=end.isoformat(),
+                start=start,
+                end=end,
                 path=str(clip.path.relative_to(self._root_dir)),
             )
 

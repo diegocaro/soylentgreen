@@ -2,7 +2,14 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from aqara_video.web.models import CameraInfo, ScanResult, SeekResult, VideoSegment
+from aqara_video.web.models import (
+    CameraInfo,
+    CameraLabels,
+    LabelsByCamera,
+    ScanResult,
+    SeekResult,
+    VideoSegment,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -12,10 +19,12 @@ class Service:
         self,
         root_dir: Path,
         scan_result: ScanResult,
+        labels_timeline: LabelsByCamera,
         camera_map: dict[str, str] | None = None,
     ):
         self._root_dir = root_dir
         self._scan_result = scan_result
+        self._labels_timeline = labels_timeline
         self._camera_map = camera_map or {}
 
     def list_cameras(self) -> list[CameraInfo]:
@@ -24,12 +33,12 @@ class Service:
             return CameraInfo(id=camera_id, name=name)
 
         cameras = [
-            map_camera(camera_id) for camera_id in self._scan_result.camera.keys()
+            map_camera(camera_id) for camera_id in self._scan_result.cameras.keys()
         ]
         return cameras
 
     def list_videos(self, camera_id: str) -> list[VideoSegment]:
-        camera = self._scan_result.camera[camera_id]
+        camera = self._scan_result.cameras[camera_id]
         return camera.segments
 
     def get_video_path(self, relative_path: str) -> Path:
@@ -54,10 +63,10 @@ class Service:
         #         )
         # TODO: Preprocess the datetime fromisoformat
 
-        camera = self._scan_result.camera[camera_id]
-        for segment in camera.segments:
-            start = datetime.fromisoformat(segment.start)
-            end = datetime.fromisoformat(segment.end)
+        cameras = self._scan_result.cameras[camera_id]
+        for segment in cameras.segments:
+            start = segment.start
+            end = segment.end
             if start <= target < end:
                 offset = (target - start).total_seconds()
                 return SeekResult(
@@ -66,3 +75,6 @@ class Service:
                 )
 
         return None
+
+    def get_labels_timeline(self, camera_id: str) -> CameraLabels:
+        return self._labels_timeline.cameras.get(camera_id, CameraLabels(labels={}))
