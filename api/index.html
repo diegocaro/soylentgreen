@@ -238,6 +238,12 @@ async function initTimeline() {
     window._sg_overviewTimeline = null;
   }
   
+  // Clear the current time indicator when switching cameras
+  const indicator = document.getElementById('currentTimeIndicator');
+  if (indicator) {
+    indicator.style.display = 'none';
+  }
+  
   const res = await fetch('/list-intervals?camera_id=' + encodeURIComponent(camera_id));
   const intervals = await res.json();
   
@@ -525,8 +531,9 @@ async function initTimeline() {
     }
   }
 
-  // Update indicator when timeline range changes
-  overviewTimeline.on('rangechange', updateCurrentTimeIndicator);
+  // Store the rangechange handler so we can clean it up later
+  const rangeChangeHandler = () => updateCurrentTimeIndicator();
+  overviewTimeline.on('rangechange', rangeChangeHandler);
 
   // Auto-scroll timeline when indicator is near the edges
   function autoScrollTimeline() {
@@ -568,7 +575,11 @@ async function initTimeline() {
   }
 
   // Update indicator and auto-scroll periodically while playing
-  setInterval(() => {
+  // Clear any existing interval to prevent multiple intervals running
+  if (window._sg_updateInterval) {
+    clearInterval(window._sg_updateInterval);
+  }
+  window._sg_updateInterval = setInterval(() => {
     updateCurrentTimeIndicator();
     autoScrollTimeline();
   }, 100);
