@@ -30,6 +30,7 @@ dev = [
     "isort>=5.13.2,<6",
     "notebook>=7.4.7",
     "matplotlib>=3.10.7",
+    "pre-commit>=4.3.0",
 ]
 
 [tool.hatch.build.targets.sdist]
@@ -42,17 +43,21 @@ include = ["aqara_video"]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.black]
-line-length = 88
-target-version = ["py312"]
+[tool.uv]
+package = true
 
-[tool.isort]
-profile = "black"
-line_length = 88
+[tool.ruff]
+fix = true
 
-[tool.mypy]
-python_version = "3.12"
-#warn_return_any = true
-#warn_unused_configs = true
-#disallow_untyped_defs = true
-#disallow_incomplete_defs = true
+[tool.ruff.lint]
+select = [
+    "UP", # modernize python
+]
+ignore = [
+    "E731" # lambda assignment
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
