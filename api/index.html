@@ -326,6 +326,14 @@ async function initTimeline() {
     await loadAndPlay(path, offset || 0, props.time);
   });
   
+  // Double-click to restore default zoom
+  overviewContainer.addEventListener('dblclick', (event) => {
+    event.preventDefault();
+    if (defaultZoomStart && defaultZoomEnd) {
+      overviewTimeline.setWindow(defaultZoomStart, defaultZoomEnd, {animation: true});
+    }
+  });
+  
   // Handle mouse move over overview timeline
   overviewContainer.addEventListener('mousemove', (event) => {
     const props = overviewTimeline.getEventProperties(event);
