@@ -1,5 +1,9 @@
 import argparse
 import logging
+from pathlib import Path
+from typing import Any, List, Optional, Tuple
+
+from joblib import Parallel, delayed
 
 from api.config import BOX_DETECTION_FILE, SCAN_RESULT_FILE, VIDEO_DIR
 from api.detector import YellowBoxDetector
@@ -24,13 +28,50 @@ def save_detections(detections: VideoDetectionSummary):
     BOX_DETECTION_FILE.write_text(detections.model_dump_json(indent=2))
 
 
+def process_segment(
+    yellow_box_detector: YellowBoxDetector,
+    video_dir: Path,
+    segment: Any,
+    detections: VideoDetectionSummary,
+):
+    video_path = video_dir / segment.path
+    if segment.path in detections.detections:
+        logger.info(f"Skipping {segment.path} (already processed)")
+        return segment.path, None  # Already processed
+    logger.info(f"Analyzing video: {video_path}")
+    try:
+        intervals = yellow_box_detector.predict(video_path)
+    except Exception as e:
+        logger.error(f"Error processing {video_path}: {e}")
+        intervals = []
+    box_intervals = [
+        LabeledInterval(label="yellow_box", start=start, end=end)
+        for start, end in intervals
+    ]
+    if intervals:
+        logger.info(f"Detected {len(intervals)} yellow box intervals in {segment.path}")
+    else:
+        logger.info(f"No yellow boxes detected in {segment.path}")
+    # Save after each video to avoid losing work
+    detections.detections[segment.path] = box_intervals
+    save_detections(detections)
+
+
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser(description="Run yellow box detection on videos.")
     parser.add_argument(
         "--camera",
         "-c",
         nargs="*",
         help="Camera ID(s) to process. If not set, all cameras will be processed.",
+    )
+    parser.add_argument(
+        "--jobs",
+        "-j",
+        type=int,
+        default=4,
+        help="Number of parallel jobs to run (default: 4)",
     )
     args = parser.parse_args()
 
@@ -40,41 +81,17 @@ if __name__ == "__main__":
 
     selected_cameras = set(args.camera) if args.camera else None
 
+    segments_to_process = []
     for camera_id, video_list in scan_result.cameras.items():
         if selected_cameras and camera_id not in selected_cameras:
             continue
-        logger.info(f"Processing camera: {camera_id}")
         for segment in video_list.segments:
-            video_path = VIDEO_DIR / segment.path
+            segments_to_process.append((camera_id, segment))
 
-            # Check if already processed
-            if segment.path in detections.detections:
-                logger.info(f"Skipping {segment.path} (already processed)")
-                continue
-
-            logger.info(f"Analyzing video: {video_path}")
-            try:
-                intervals = yellow_box_detector.predict(video_path)
-            except Exception as e:
-                logger.error(f"Error processing {video_path}: {e}")
-                intervals = []
-
-            # Store detection result
-            box_intervals = [
-                LabeledInterval(label="yellow_box", start=start, end=end)
-                for start, end in intervals
-            ]
-            detections.detections[segment.path] = box_intervals
-
-            if intervals:
-                logger.info(
-                    f"Detected {len(intervals)} yellow box intervals in {segment.path}"
-                )
-            else:
-                logger.info(f"No yellow boxes detected in {segment.path}")
-
-            # Save after each video to avoid losing work
-            save_detections(detections)
+    Parallel(n_jobs=args.jobs, prefer="threads")(
+        delayed(process_segment)(yellow_box_detector, VIDEO_DIR, segment, detections)
+        for camera_id, segment in segments_to_process
+    )
 
     logger.info(
         f"Processing complete. Total videos processed: {len(detections.detections)}"
