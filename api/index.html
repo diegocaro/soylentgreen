@@ -304,10 +304,34 @@ async function initTimeline() {
   
   // Click on timeline to seek and play
   let hasZoomed = false; // Track if user has zoomed in
+  let isDragging = false; // Track if user is dragging
+  let dragStartTime = null;
+  
+  // Track drag state to prevent click-on-drag
+  overviewContainer.addEventListener('mousedown', (e) => {
+    isDragging = false;
+    dragStartTime = Date.now();
+  });
+  
+  overviewContainer.addEventListener('mousemove', (e) => {
+    if (dragStartTime !== null) {
+      isDragging = true;
+    }
+  });
+  
+  overviewContainer.addEventListener('mouseup', (e) => {
+    dragStartTime = null;
+  });
   
   overviewTimeline.on('click', async (event) => {
     const props = event;
     if (!props.time) return;
+    
+    // Don't trigger click action if user was dragging
+    if (isDragging) {
+      isDragging = false;
+      return;
+    }
     
     // Only zoom on first click (when at default view)
     if (!hasZoomed) {
