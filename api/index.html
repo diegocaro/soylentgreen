@@ -250,18 +250,18 @@ async function initTimeline() {
     window._sg_overviewTimeline = null;
   }
   
-  const res = await fetch('/list?camera_id=' + encodeURIComponent(camera_id));
-  const clips = await res.json();
+  const res = await fetch('/list-intervals?camera_id=' + encodeURIComponent(camera_id));
+  const intervals = await res.json();
   
   // Fetch labels for this camera
   const labelsRes = await fetch('/labels?camera_id=' + encodeURIComponent(camera_id));
   const labels = await labelsRes.json();
   window._sg_labels = labels;
-  const items = clips.map((c, i) => ({
+  const items = intervals.map((interval, i) => ({
     id: i,
-    content: c.name,
-    start: c.start,
-    end: c.end
+    content: '',
+    start: interval.start,
+    end: interval.end
   }));
 
   // Create overview timeline
@@ -358,33 +358,13 @@ async function initTimeline() {
     const end = new Date(props.time.getTime() + windowSize / 2);
     timeline.setWindow(start, end, {animation: true});
     
-    // Also seek to and play the video at that time
+    // Seek to and play the video at that time
     const t = props.time.toISOString();
     const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id));
     if (!resp.ok) return;
     const { path, offset } = await resp.json();
-
-    // find index in our clips list
-    const idx = clips.findIndex(c => c.path === path);
     
-    // Check if we're seeking within the currently playing video
-    if (idx !== -1 && idx === window._sg_currentIndex) {
-      const player = activePlayer();
-      const currentSrc = player.src;
-      const targetSrc = '/video?path=' + encodeURIComponent(path);
-      
-      // If same video is already loaded, just seek
-      if (currentSrc.includes(encodeURIComponent(path))) {
-        player.currentTime = offset || 0;
-        player.play().catch(() => {});
-        timeline.setSelection(idx);
-        return;
-      }
-    }
-    
-    // Different video, load it
-    if (idx !== -1) window._sg_currentIndex = idx;
-    await loadAndPlay(path, offset || 0, idx);
+    await loadAndPlay(path, offset || 0, props.time);
   };
   
   // Handle mouse move over overview timeline
@@ -414,9 +394,8 @@ async function initTimeline() {
     overviewScrubLine.style.display = 'none';
   });
 
-  // store clips globally so we can advance to next
-  window._sg_clips = clips;
-  window._sg_currentIndex = null;
+  // store intervals globally
+  window._sg_intervals = intervals;
   window._sg_timeline = timeline;
 
   const playerA = document.getElementById('playerA');
@@ -427,15 +406,22 @@ async function initTimeline() {
   function inactivePlayer() { return active === 'A' ? playerB : playerA; }
 
   // helper to load into the inactive player, seek when metadata is ready, play and then swap
-  async function loadAndPlay(path, offsetSeconds, setActiveIndex) {
+  async function loadAndPlay(path, offsetSeconds, seekTimestamp) {
     const target = inactivePlayer();
     target.pause();
     target.removeAttribute('src');
     target.src = '/video?path=' + encodeURIComponent(path);
+    
+    // Store the seek timestamp for calculating next video time
+    target.dataset.seekTimestamp = seekTimestamp ? seekTimestamp.toISOString() : null;
 
     const onMeta = function() {
       // clamp offset
       const seek = Math.max(0, Math.min(offsetSeconds || 0, target.duration || 0));
+      
+      // Store video duration for auto-advance calculation
+      target.dataset.videoDuration = target.duration;
+      target.dataset.videoOffset = seek;
       
       // Wait for seek to complete before playing
       const onSeeked = function() {
@@ -455,10 +441,6 @@ async function initTimeline() {
           // pause the now inactive one
           const nowInactive = inactivePlayer();
           try { nowInactive.pause(); } catch (e) {}
-          // highlight the current clip on timeline
-          if (setActiveIndex !== undefined && window._sg_timeline) {
-            window._sg_timeline.setSelection(setActiveIndex);
-          }
           target.removeEventListener('playing', onPlaying);
         };
         target.addEventListener('playing', onPlaying);
@@ -514,51 +496,55 @@ async function initTimeline() {
     const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id));
     if (!resp.ok) return;
     const { path, offset } = await resp.json();
-
-    // find index in our clips list
-    const idx = clips.findIndex(c => c.path === path);
     
-    // Check if we're seeking within the currently playing video
-    if (idx !== -1 && idx === window._sg_currentIndex) {
-      const player = activePlayer();
-      const currentSrc = player.src;
-      const targetSrc = '/video?path=' + encodeURIComponent(path);
-      
-      // If same video is already loaded, just seek
-      if (currentSrc.includes(encodeURIComponent(path))) {
-        player.currentTime = offset || 0;
-        player.play().catch(() => {});
-        timeline.setSelection(idx);
-        return;
-      }
-    }
-    
-    // Different video, load it
-    if (idx !== -1) window._sg_currentIndex = idx;
-    await loadAndPlay(path, offset || 0, idx);
+    await loadAndPlay(path, offset || 0, props.time);
   };
 
-  // when the active clip finishes, try to play the next one using the double-buffer approach
+  // When video ends, find the next available video and play it
   playerA.addEventListener('ended', async () => {
     if (active !== 'A') return; // only respond if A is active
-    const idx = window._sg_currentIndex;
-    if (idx === null) return;
-    const next = idx + 1;
-    if (next >= clips.length) return;
-    window._sg_currentIndex = next;
-    const nextClip = clips[next];
-    await loadAndPlay(nextClip.path, 0, next);
+    
+    // Calculate what time this video ended at
+    const seekTimestamp = playerA.dataset.seekTimestamp;
+    const videoOffset = parseFloat(playerA.dataset.videoOffset || 0);
+    const videoDuration = parseFloat(playerA.dataset.videoDuration || 0);
+    
+    if (!seekTimestamp) return;
+    
+    const startTime = new Date(seekTimestamp);
+    const playedDuration = videoDuration - videoOffset;
+    const endTime = new Date(startTime.getTime() + playedDuration * 1000);
+    
+    // Seek to the exact end time (don't skip any content)
+    const t = endTime.toISOString();
+    const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id));
+    if (!resp.ok) return;
+    const { path, offset } = await resp.json();
+    
+    await loadAndPlay(path, offset || 0, endTime);
   });
 
   playerB.addEventListener('ended', async () => {
     if (active !== 'B') return; // only respond if B is active
-    const idx = window._sg_currentIndex;
-    if (idx === null) return;
-    const next = idx + 1;
-    if (next >= clips.length) return;
-    window._sg_currentIndex = next;
-    const nextClip = clips[next];
-    await loadAndPlay(nextClip.path, 0, next);
+    
+    // Calculate what time this video ended at
+    const seekTimestamp = playerB.dataset.seekTimestamp;
+    const videoOffset = parseFloat(playerB.dataset.videoOffset || 0);
+    const videoDuration = parseFloat(playerB.dataset.videoDuration || 0);
+    
+    if (!seekTimestamp) return;
+    
+    const startTime = new Date(seekTimestamp);
+    const playedDuration = videoDuration - videoOffset;
+    const endTime = new Date(startTime.getTime() + playedDuration * 1000);
+    
+    // Seek to the exact end time (don't skip any content)
+    const t = endTime.toISOString();
+    const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id));
+    if (!resp.ok) return;
+    const { path, offset } = await resp.json();
+    
+    await loadAndPlay(path, offset || 0, endTime);
   });
 }
 
