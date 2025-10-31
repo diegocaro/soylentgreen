@@ -280,12 +280,13 @@ async function initTimeline() {
   
   window._sg_overviewTimeline = overviewTimeline;
   
-  // Set default view to 2 days centered on most recent data
+  // Set default view to 2 days centered on most recent data and store it
+  let defaultZoomStart, defaultZoomEnd;
   if (items.length > 0) {
     const lastItem = items[items.length - 1];
-    const endTime = new Date(lastItem.end);
-    const startTime = new Date(endTime.getTime() - (2 * 24 * 60 * 60 * 1000)); // 2 days before
-    overviewTimeline.setWindow(startTime, endTime);
+    defaultZoomEnd = new Date(lastItem.end);
+    defaultZoomStart = new Date(defaultZoomEnd.getTime() - (2 * 24 * 60 * 60 * 1000)); // 2 days before
+    overviewTimeline.setWindow(defaultZoomStart, defaultZoomEnd);
   }
   
   // Render labels on overview timeline after it's ready
@@ -305,6 +306,13 @@ async function initTimeline() {
   overviewTimeline.on('click', async (event) => {
     const props = event;
     if (!props.time) return;
+    
+    // Zoom in to 1 hour centered on the clicked time
+    const clickedTime = new Date(props.time);
+    const halfHour = 30 * 60 * 1000; // 30 minutes in milliseconds
+    const zoomStart = new Date(clickedTime.getTime() - halfHour);
+    const zoomEnd = new Date(clickedTime.getTime() + halfHour);
+    overviewTimeline.setWindow(zoomStart, zoomEnd, {animation: true});
     
     // Seek to and play the video at that time
     const t = props.time.toISOString();
