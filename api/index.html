@@ -262,6 +262,12 @@ async function initTimeline() {
     window._sg_overviewTimeline = null;
   }
   
+  // Clear existing playback indicator interval
+  if (window._sg_playbackInterval) {
+    clearInterval(window._sg_playbackInterval);
+    window._sg_playbackInterval = null;
+  }
+  
   const res = await fetch('/list-intervals?camera_id=' + encodeURIComponent(camera_id));
   const intervals = await res.json();
   
@@ -459,7 +465,7 @@ async function initTimeline() {
   }
   
   // Update playback indicator continuously while playing
-  setInterval(updatePlaybackIndicator, 100);
+  window._sg_playbackInterval = setInterval(updatePlaybackIndicator, 100);
 
   // helper to load into the inactive player, seek when metadata is ready, play and then swap
   async function loadAndPlay(path, offsetSeconds, seekTimestamp) {
@@ -678,7 +684,7 @@ async function initTimeline() {
 (async () => {
   await loadCameras();
   await initTimeline();
-})();
+  })();
 </script>
     </body>
     </html>
