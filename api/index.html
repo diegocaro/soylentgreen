@@ -43,6 +43,16 @@
           top: 0;
           bottom: 0;
         }
+        .playbackIndicator {
+          position: absolute;
+          width: 3px;
+          background: rgba(255, 0, 0, 0.9);
+          pointer-events: none;
+          z-index: 998;
+          top: 0;
+          bottom: 0;
+          display: none;
+        }
         .availability-marker {
           position: absolute;
           bottom: 0;
@@ -101,12 +111,14 @@
         <div id="detailRangeIndicator"></div>
         <div id="overviewScrubLine" class="scrubLine"></div>
         <div id="overviewTooltip" class="timeTooltip"></div>
+        <div id="overviewPlaybackIndicator" class="playbackIndicator"></div>
       </div>
       <div class="timeline-label">Detailed view:</div>
       <div style="position: relative;">
         <div id="timeline"></div>
         <div id="scrubLine" class="scrubLine"></div>
         <div id="timeTooltip" class="timeTooltip"></div>
+        <div id="playbackIndicator" class="playbackIndicator"></div>
       </div>
       <div id="labelLegend" class="label-legend"></div>
       <div id="playerContainer" style="position:relative; width:720px; height:405px;">
@@ -404,6 +416,50 @@ async function initTimeline() {
 
   function activePlayer() { return active === 'A' ? playerA : playerB; }
   function inactivePlayer() { return active === 'A' ? playerB : playerA; }
+  
+  // Function to update playback indicator position
+  function updatePlaybackIndicator() {
+    const player = activePlayer();
+    if (!player || player.paused || !player.dataset.seekTimestamp) return;
+    
+    const seekTimestamp = new Date(player.dataset.seekTimestamp);
+    const videoOffset = parseFloat(player.dataset.videoOffset || 0);
+    const currentTime = player.currentTime;
+    
+    // Calculate actual playback time
+    const playbackTime = new Date(seekTimestamp.getTime() + (currentTime - videoOffset) * 1000);
+    
+    // Update detailed timeline indicator
+    const detailContainer = document.getElementById('timeline');
+    const detailIndicator = document.getElementById('playbackIndicator');
+    const detailRange = timeline.getWindow();
+    const detailSpan = detailRange.end - detailRange.start;
+    
+    if (playbackTime >= detailRange.start && playbackTime <= detailRange.end) {
+      const detailOffset = (playbackTime - detailRange.start) / detailSpan;
+      detailIndicator.style.left = (detailOffset * detailContainer.clientWidth) + 'px';
+      detailIndicator.style.display = 'block';
+    } else {
+      detailIndicator.style.display = 'none';
+    }
+    
+    // Update overview timeline indicator
+    const overviewContainer = document.getElementById('overviewTimeline');
+    const overviewIndicator = document.getElementById('overviewPlaybackIndicator');
+    const overviewRange = overviewTimeline.getWindow();
+    const overviewSpan = overviewRange.end - overviewRange.start;
+    
+    if (playbackTime >= overviewRange.start && playbackTime <= overviewRange.end) {
+      const overviewOffset = (playbackTime - overviewRange.start) / overviewSpan;
+      overviewIndicator.style.left = (overviewOffset * overviewContainer.clientWidth) + 'px';
+      overviewIndicator.style.display = 'block';
+    } else {
+      overviewIndicator.style.display = 'none';
+    }
+  }
+  
+  // Update playback indicator continuously while playing
+  setInterval(updatePlaybackIndicator, 100);
 
   // helper to load into the inactive player, seek when metadata is ready, play and then swap
   async function loadAndPlay(path, offsetSeconds, seekTimestamp) {
