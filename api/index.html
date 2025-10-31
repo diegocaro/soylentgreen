@@ -8,7 +8,18 @@
         .header { display: flex; justify-content: space-between; align-items: center;  }
         .header h2 { margin-top: 0; }
         .camera-selector { text-align: right; }
-        #overviewTimeline { border: 1px solid #ccc; height: 150px; cursor: pointer; position: relative; margin-bottom: 10px; background: #f5f5f5; }
+        #overviewTimeline { border: 1px solid #ccc; height: 80px; cursor: pointer; position: relative; margin-bottom: 10px; background: #f5f5f5; }
+        #detailRangeIndicator {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          background: rgba(33, 150, 243, 0.2);
+          border-left: 2px solid rgba(33, 150, 243, 0.8);
+          border-right: 2px solid rgba(33, 150, 243, 0.8);
+          pointer-events: none;
+          z-index: 10;
+        }
+        #timeline { border: 1px solid #ccc; height: 100px; cursor: pointer; position: relative; }
         video { margin-top: 20px; width: 720px; height: 405px; }
         .timeTooltip {
           position: absolute;
@@ -29,16 +40,6 @@
           pointer-events: none;
           display: none;
           z-index: 999;
-          top: 0;
-          bottom: 0;
-        }
-        #currentTimeIndicator {
-          position: absolute;
-          width: 2px;
-          background: rgba(255, 0, 0, 0.9);
-          pointer-events: none;
-          display: none;
-          z-index: 100;
           top: 0;
           bottom: 0;
         }
@@ -94,11 +95,18 @@
           </select>
         </div>
       </div>
+      <div class="timeline-label">Overview (click to jump to date/time):</div>
       <div style="position: relative;">
         <div id="overviewTimeline"></div>
-        <div id="currentTimeIndicator"></div>
+        <div id="detailRangeIndicator"></div>
         <div id="overviewScrubLine" class="scrubLine"></div>
         <div id="overviewTooltip" class="timeTooltip"></div>
+      </div>
+      <div class="timeline-label">Detailed view:</div>
+      <div style="position: relative;">
+        <div id="timeline"></div>
+        <div id="scrubLine" class="scrubLine"></div>
+        <div id="timeTooltip" class="timeTooltip"></div>
       </div>
       <div id="labelLegend" class="label-legend"></div>
       <div id="playerContainer" style="position:relative; width:720px; height:405px;">
@@ -232,16 +240,14 @@ function updateLabelLegend(labels) {
 async function initTimeline() {
   if (!camera_id) return;
   
-  // Destroy existing timeline if it exists
+  // Destroy existing timelines if they exist
+  if (window._sg_timeline) {
+    window._sg_timeline.destroy();
+    window._sg_timeline = null;
+  }
   if (window._sg_overviewTimeline) {
     window._sg_overviewTimeline.destroy();
     window._sg_overviewTimeline = null;
-  }
-  
-  // Clear the current time indicator when switching cameras
-  const indicator = document.getElementById('currentTimeIndicator');
-  if (indicator) {
-    indicator.style.display = 'none';
   }
   
   const res = await fetch('/list-intervals?camera_id=' + encodeURIComponent(camera_id));
@@ -274,101 +280,92 @@ async function initTimeline() {
   
   const overviewTimeline = new vis.Timeline(overviewContainer, overviewItems, {
     selectable: false,
-    zoomMin: 1000 * 60 * 5, // 5 minutes minimum
+    zoomMin: 1000 * 60 * 60 * 24, // 1 day minimum
     zoomMax: 1000 * 60 * 60 * 24 * 365, // 1 year maximum
     stack: false,
     showCurrentTime: true,
     showMajorLabels: true,
-    showMinorLabels: true,
-    zoomable: true,
-    moveable: true
+    showMinorLabels: true
   });
   
   window._sg_overviewTimeline = overviewTimeline;
-  
-  // Set default view to 2 days centered on most recent data and store it
-  let defaultZoomStart, defaultZoomEnd;
-  if (items.length > 0) {
-    const lastItem = items[items.length - 1];
-    defaultZoomEnd = new Date(lastItem.end);
-    defaultZoomStart = new Date(defaultZoomEnd.getTime() - (2 * 24 * 60 * 60 * 1000)); // 2 days before
-    overviewTimeline.setWindow(defaultZoomStart, defaultZoomEnd);
-  }
   
   // Render labels on overview timeline after it's ready
   setTimeout(() => {
     renderLabelMarkers(overviewContainer, labels, overviewTimeline);
   }, 100);
+
+  // Create detailed timeline
+  const container = document.getElementById('timeline');
+  const tooltip = document.getElementById('timeTooltip');
+  const scrubLine = document.getElementById('scrubLine');
+  
+  const timeline = new vis.Timeline(container, items, {
+    selectable: true,
+    zoomMin: 1000 * 60 * 5,
+    zoomMax: 1000 * 60 * 60 * 24,
+    stack: false,
+    showCurrentTime: true
+  });
+  
+  // Render labels on detailed timeline after it's ready
+  setTimeout(() => {
+    renderLabelMarkers(container, labels, timeline);
+  }, 100);
   
   // Update label legend
   updateLabelLegend(labels);
+
+  // Function to update the detail range indicator
+  function updateDetailRangeIndicator() {
+    const detailRange = timeline.getWindow();
+    const overviewRange = overviewTimeline.getWindow();
+    const indicator = document.getElementById('detailRangeIndicator');
+    const container = document.getElementById('overviewTimeline');
+    
+    const containerWidth = container.clientWidth;
+    const overviewSpan = overviewRange.end - overviewRange.start;
+    
+    const startOffset = (detailRange.start - overviewRange.start) / overviewSpan;
+    const endOffset = (detailRange.end - overviewRange.start) / overviewSpan;
+    
+    indicator.style.left = (startOffset * containerWidth) + 'px';
+    indicator.style.width = ((endOffset - startOffset) * containerWidth) + 'px';
+  }
   
-  // Re-render labels when zooming or panning
+  // Sync overview timeline with detailed timeline and update indicator
+  timeline.on('rangechange', () => {
+    updateDetailRangeIndicator();
+    renderLabelMarkers(container, labels, timeline);
+  });
+  
   overviewTimeline.on('rangechange', () => {
+    updateDetailRangeIndicator();
     renderLabelMarkers(overviewContainer, labels, overviewTimeline);
   });
   
-  // Click on timeline to seek and play
-  let hasZoomed = false; // Track if user has zoomed in
-  let isDragging = false; // Track if user is dragging
-  let dragStartTime = null;
+  // Initial update
+  setTimeout(updateDetailRangeIndicator, 100);
   
-  // Track drag state to prevent click-on-drag
-  overviewContainer.addEventListener('mousedown', (e) => {
-    isDragging = false;
-    dragStartTime = Date.now();
-  });
-  
-  overviewContainer.addEventListener('mousemove', (e) => {
-    if (dragStartTime !== null) {
-      isDragging = true;
-    }
-  });
-  
-  overviewContainer.addEventListener('mouseup', (e) => {
-    dragStartTime = null;
-  });
-  
-  overviewTimeline.on('click', async (event) => {
-    const props = event;
+  // Click on overview to jump to that time range and start playing
+  overviewContainer.onclick = async (event) => {
+    const props = overviewTimeline.getEventProperties(event);
     if (!props.time) return;
     
-    // Don't trigger click action if user was dragging
-    if (isDragging) {
-      isDragging = false;
-      return;
-    }
-    
-    // Only zoom on first click (when at default view)
-    if (!hasZoomed) {
-      const clickedTime = new Date(props.time);
-      const halfHour = 30 * 60 * 1000; // 30 minutes in milliseconds
-      const zoomStart = new Date(clickedTime.getTime() - halfHour);
-      const zoomEnd = new Date(clickedTime.getTime() + halfHour);
-      overviewTimeline.setWindow(zoomStart, zoomEnd, {animation: true});
-      hasZoomed = true;
-    }
+    // Center the detailed timeline on the clicked time
+    const windowSize = 1000 * 60 * 60; // 1 hour window
+    const start = new Date(props.time.getTime() - windowSize / 2);
+    const end = new Date(props.time.getTime() + windowSize / 2);
+    timeline.setWindow(start, end, {animation: true});
     
     // Seek to and play the video at that time
     const t = props.time.toISOString();
     const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id));
-    if (!resp.ok) {
-      console.error('Failed to seek to time:', t);
-      return;
-    }
+    if (!resp.ok) return;
     const { path, offset } = await resp.json();
     
     await loadAndPlay(path, offset || 0, props.time);
-  });
-  
-  // Double-click to restore default zoom
-  overviewContainer.addEventListener('dblclick', (event) => {
-    event.preventDefault();
-    if (defaultZoomStart && defaultZoomEnd) {
-      overviewTimeline.setWindow(defaultZoomStart, defaultZoomEnd, {animation: true});
-      hasZoomed = false; // Reset zoom flag
-    }
-  });
+  };
   
   // Handle mouse move over overview timeline
   overviewContainer.addEventListener('mousemove', (event) => {
@@ -399,7 +396,7 @@ async function initTimeline() {
 
   // store intervals globally
   window._sg_intervals = intervals;
-  window._sg_timeline = overviewTimeline;
+  window._sg_timeline = timeline;
 
   const playerA = document.getElementById('playerA');
   const playerB = document.getElementById('playerB');
@@ -409,28 +406,16 @@ async function initTimeline() {
   function inactivePlayer() { return active === 'A' ? playerB : playerA; }
 
   // helper to load into the inactive player, seek when metadata is ready, play and then swap
-  let loadAndPlayCounter = 0; // Track the most recent load request
-  
   async function loadAndPlay(path, offsetSeconds, seekTimestamp) {
-    // Increment counter for this load request
-    const myLoadId = ++loadAndPlayCounter;
-    
     const target = inactivePlayer();
     target.pause();
     target.removeAttribute('src');
-    target.load(); // Reset the player
     target.src = '/video?path=' + encodeURIComponent(path);
     
     // Store the seek timestamp for calculating next video time
     target.dataset.seekTimestamp = seekTimestamp ? seekTimestamp.toISOString() : null;
 
     const onMeta = function() {
-      // Check if this is still the most recent request
-      if (myLoadId !== loadAndPlayCounter) {
-        target.removeEventListener('loadedmetadata', onMeta);
-        return; // A newer request has started, abandon this one
-      }
-      
       // clamp offset
       const seek = Math.max(0, Math.min(offsetSeconds || 0, target.duration || 0));
       
@@ -442,18 +427,7 @@ async function initTimeline() {
       const onSeeked = function() {
         target.removeEventListener('seeked', onSeeked);
         
-        // Check again if this is still the most recent request
-        if (myLoadId !== loadAndPlayCounter) {
-          return; // Abandon if superseded
-        }
-        
         const onPlaying = function() {
-          // Final check before switching
-          if (myLoadId !== loadAndPlayCounter) {
-            target.removeEventListener('playing', onPlaying);
-            return;
-          }
-          
           // bring target on top
           if (active === 'A') {
             playerB.style.zIndex = 3;
@@ -468,9 +442,6 @@ async function initTimeline() {
           const nowInactive = inactivePlayer();
           try { nowInactive.pause(); } catch (e) {}
           target.removeEventListener('playing', onPlaying);
-          
-          // Update the indicator immediately when video starts playing
-          updateCurrentTimeIndicator();
         };
         target.addEventListener('playing', onPlaying);
         target.play().catch(() => {/* autoplay may be blocked if not user-initiated */});
@@ -491,98 +462,43 @@ async function initTimeline() {
     return `${hours}:${minutes}:${seconds}`;
   }
 
-  // Update current time indicator position
-  function updateCurrentTimeIndicator() {
-    if (!overviewTimeline) return;
-    
-    const player = activePlayer();
-    const seekTimestamp = player.dataset.seekTimestamp;
-    
-    if (!seekTimestamp) {
-      document.getElementById('currentTimeIndicator').style.display = 'none';
-      return;
+  // Handle mouse move over timeline for scrubbing preview
+  container.addEventListener('mousemove', (event) => {
+    const props = timeline.getEventProperties(event);
+    if (props.time) {
+      const timeDate = new Date(props.time);
+      const rect = container.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      
+      // Show tooltip with time
+      tooltip.textContent = formatTime(timeDate);
+      tooltip.style.display = 'block';
+      tooltip.style.left = `${event.clientX - rect.left + 10}px`;
+      tooltip.style.top = `${event.clientY - rect.top - 30}px`;
+      
+      // Show scrub line
+      scrubLine.style.display = 'block';
+      scrubLine.style.left = `${mouseX}px`;
     }
-    
-    const startTime = new Date(seekTimestamp);
-    const videoOffset = parseFloat(player.dataset.videoOffset || 0);
-    const currentVideoTime = player.currentTime || 0;
-    
-    if (isNaN(currentVideoTime)) {
-      document.getElementById('currentTimeIndicator').style.display = 'none';
-      return;
-    }
-    
-    const elapsedFromStart = currentVideoTime - videoOffset;
-    const currentTime = new Date(startTime.getTime() + elapsedFromStart * 1000);
-    
-    const timelineRange = overviewTimeline.getWindow();
-    const container = document.getElementById('overviewTimeline');
-    const containerWidth = container.clientWidth;
-    const timeSpan = timelineRange.end - timelineRange.start;
-    
-    // Check if current time is within visible range
-    if (currentTime >= timelineRange.start && currentTime <= timelineRange.end) {
-      const offset = (currentTime - timelineRange.start) / timeSpan;
-      const indicator = document.getElementById('currentTimeIndicator');
-      indicator.style.display = 'block';
-      indicator.style.left = (offset * containerWidth) + 'px';
-    } else {
-      document.getElementById('currentTimeIndicator').style.display = 'none';
-    }
-  }
+  });
 
-  // Store the rangechange handler so we can clean it up later
-  const rangeChangeHandler = () => updateCurrentTimeIndicator();
-  overviewTimeline.on('rangechange', rangeChangeHandler);
+  // Hide tooltip and scrub line when mouse leaves
+  container.addEventListener('mouseleave', () => {
+    tooltip.style.display = 'none';
+    scrubLine.style.display = 'none';
+  });
 
-  // Auto-scroll timeline when indicator is near the edges
-  function autoScrollTimeline() {
-    if (!overviewTimeline) return;
+  // Click on timeline to seek
+  container.onclick = async (event) => {
+    const props = timeline.getEventProperties(event);
+    if (!props.time) return;
+    const t = props.time.toISOString();
+    const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id));
+    if (!resp.ok) return;
+    const { path, offset } = await resp.json();
     
-    const player = activePlayer();
-    const seekTimestamp = player.dataset.seekTimestamp;
-    
-    if (!seekTimestamp || player.paused) return;
-    
-    const startTime = new Date(seekTimestamp);
-    const videoOffset = parseFloat(player.dataset.videoOffset || 0);
-    const currentVideoTime = player.currentTime || 0;
-    
-    if (isNaN(currentVideoTime) || currentVideoTime === 0) return;
-    
-    const elapsedFromStart = currentVideoTime - videoOffset;
-    const currentTime = new Date(startTime.getTime() + elapsedFromStart * 1000);
-    
-    const timelineRange = overviewTimeline.getWindow();
-    const timeSpan = timelineRange.end - timelineRange.start;
-    const edgeThreshold = timeSpan * 0.1; // 10% from edge
-    
-    const timeFromStart = currentTime - timelineRange.start;
-    const timeFromEnd = timelineRange.end - currentTime;
-    
-    // Auto-scroll if near the end (within 10% of visible range)
-    if (timeFromEnd < edgeThreshold && timeFromEnd > 0) {
-      const newStart = new Date(timelineRange.start.getTime() + edgeThreshold);
-      const newEnd = new Date(timelineRange.end.getTime() + edgeThreshold);
-      overviewTimeline.setWindow(newStart, newEnd, {animation: false});
-    }
-    // Auto-scroll if near the beginning (within 10% of visible range)
-    else if (timeFromStart < edgeThreshold && timeFromStart > 0) {
-      const newStart = new Date(timelineRange.start.getTime() - edgeThreshold);
-      const newEnd = new Date(timelineRange.end.getTime() - edgeThreshold);
-      overviewTimeline.setWindow(newStart, newEnd, {animation: false});
-    }
-  }
-
-  // Update indicator and auto-scroll periodically while playing
-  // Clear any existing interval to prevent multiple intervals running
-  if (window._sg_updateInterval) {
-    clearInterval(window._sg_updateInterval);
-  }
-  window._sg_updateInterval = setInterval(() => {
-    updateCurrentTimeIndicator();
-    autoScrollTimeline();
-  }, 100);
+    await loadAndPlay(path, offset || 0, props.time);
+  };
 
   // When video ends, find the next available video and play it
   playerA.addEventListener('ended', async () => {
