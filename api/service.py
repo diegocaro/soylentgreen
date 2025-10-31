@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from api.models import (
@@ -8,6 +8,7 @@ from api.models import (
     LabelsByCamera,
     ScanResult,
     SeekResult,
+    TimeInterval,
     VideoSegment,
 )
 
@@ -78,3 +79,30 @@ class Service:
 
     def get_labels_timeline(self, camera_id: str) -> CameraLabels:
         return self._labels_timeline.cameras.get(camera_id, CameraLabels(labels={}))
+
+    def list_intervals(self, camera_id: str, max_gap_seconds: int = 30) -> list[TimeInterval]:
+        """
+        Get merged time intervals for a camera where video clips exist.
+        Segments at most max_gap_seconds apart are merged into one interval.
+        """
+        camera = self._scan_result.cameras[camera_id]
+        segments = sorted(camera.segments, key=lambda s: s.start)
+        
+        if not segments:
+            return []
+        
+        merged_intervals = []
+        current_start = segments[0].start
+        current_end = segments[0].end
+        
+        for segment in segments[1:]:
+            gap = (segment.start - current_end).total_seconds()
+            if gap <= max_gap_seconds:
+                current_end = max(current_end, segment.end)
+            else:
+                merged_intervals.append(TimeInterval(start=current_start, end=current_end))
+                current_start = segment.start
+                current_end = segment.end
+        
+        merged_intervals.append(TimeInterval(start=current_start, end=current_end))
+        return merged_intervals

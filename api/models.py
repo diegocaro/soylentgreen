@@ -39,6 +39,11 @@ class VideoDetectionSummary(BaseModel):
     detections: dict[str, list[LabeledInterval]]  # key: video segment path
 
 
+class TimeInterval(BaseModel):
+    start: datetime
+    end: datetime
+
+
 class IntervalTimestamp(BaseModel):
     start: datetime
     end: datetime

@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 
 from api.config import CAMERA_MAP, LABELS_TIMELINE_FILE, SCAN_RESULT_FILE, VIDEO_DIR
-from api.models import CameraInfo, CameraLabels, LabelsByCamera, ScanResult
+from api.models import CameraInfo, CameraLabels, LabelsByCamera, ScanResult, TimeInterval
 from api.service import Service
 
 logging.basicConfig(level=logging.INFO)
@@ -61,3 +61,8 @@ def seek(camera_id: str, time: str, service: Service = Depends(get_service)):
 @app.get("/labels")
 def get_labels(camera_id: str, service: Service = Depends(get_service)) -> CameraLabels:
     return service.get_labels_timeline(camera_id)
+
+
+@app.get("/list-intervals")
+def list_intervals(camera_id: str, service: Service = Depends(get_service)) -> list[TimeInterval]:
+    return service.list_intervals(camera_id=camera_id)
