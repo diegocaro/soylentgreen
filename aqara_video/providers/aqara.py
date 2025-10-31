@@ -1,6 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import List
 
 from ..core.clip import Clip
 from ..core.provider import CameraProvider
@@ -23,7 +22,7 @@ class AqaraProvider(CameraProvider):
         """Extract camera ID from the path."""
         return path.name
 
-    def load_clips(self, path: Path) -> List[Clip]:
+    def load_clips(self, path: Path) -> list[Clip]:
         """Load clips from the specified path using Aqara's format."""
         files = [self.create_clip(file) for file in path.glob("*/*.mp4")]
         return sorted(files, key=lambda clip: clip.timestamp)
@@ -49,7 +48,7 @@ class AqaraProvider(CameraProvider):
         return path.parts[-3]
 
     @classmethod
-    def cameras_in_dir(cls, root_dir: Path) -> List[str]:
+    def cameras_in_dir(cls, root_dir: Path) -> list[str]:
         """
         Get a list of all camera IDs found in the root directory.
         Scans the root directory for subdirectories that represent camera IDs.

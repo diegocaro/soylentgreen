@@ -2,7 +2,6 @@ import argparse
 import threading
 from abc import ABC, abstractmethod
 from queue import Queue
-from typing import List, Tuple
 
 import cv2
 
@@ -51,15 +50,15 @@ class VideoLoop:
         while True:
             frame = self.video_producer.capture()
 
-            predictions: List[Prediction] = []
+            predictions: list[Prediction] = []
             # predictions = model.predict(model.preprocess(frame))
             frame_with_box = draw_boxes(frame, predictions)
             self.draw(frame_with_box)
 
     def process_loop(
         self,
-        frame_q: Queue[Tuple[int, ImageCV]],
-        pred_q: Queue[Tuple[int, List[Prediction]]],
+        frame_q: Queue[tuple[int, ImageCV]],
+        pred_q: Queue[tuple[int, list[Prediction]]],
     ):
         frame_id = -1
         predictions = []
@@ -80,7 +79,7 @@ class VideoLoop:
             self.draw(frame_with_box)
 
 
-def consume_frames(frame_q: Queue[Tuple[int, ImageCV]]) -> Tuple[int, ImageCV]:
+def consume_frames(frame_q: Queue[tuple[int, ImageCV]]) -> tuple[int, ImageCV]:
     while not frame_q.empty():
         frame_id, frame = frame_q.get()
         try:
@@ -92,8 +91,8 @@ def consume_frames(frame_q: Queue[Tuple[int, ImageCV]]) -> Tuple[int, ImageCV]:
 
 def predict_loop(
     model: Detector,
-    frame_q: Queue[Tuple[int, ImageCV]],
-    pred_q: Queue[Tuple[int, List[Prediction]]],
+    frame_q: Queue[tuple[int, ImageCV]],
+    pred_q: Queue[tuple[int, list[Prediction]]],
 ):
     while True:
         frame_id, frame = frame_q.get()
@@ -118,7 +117,6 @@ def predict_loop(
 
 
 def main():
-
     parser = argparse.ArgumentParser(description="Create a video loop")
     parser.add_argument("--device", type=str, default="cpu", help="torch device to use")
     parser.add_argument(
@@ -133,8 +131,8 @@ def main():
     obj = VideoLoop(video_producer=input_video)
     # obj.process(det)
 
-    frame_queue: Queue[Tuple[int, ImageCV]] = Queue(maxsize=1000)
-    predictions_queue: Queue[Tuple[int, List[Prediction]]] = Queue(maxsize=1000)
+    frame_queue: Queue[tuple[int, ImageCV]] = Queue(maxsize=1000)
+    predictions_queue: Queue[tuple[int, list[Prediction]]] = Queue(maxsize=1000)
 
     # daemon=True is for killing the thread if main reach the end or exit
     loop = threading.Thread(

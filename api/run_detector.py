@@ -1,8 +1,8 @@
 import logging
 
-from aqara_video.web.config import BOX_DETECTION_FILE, SCAN_RESULT_FILE, VIDEO_DIR
-from aqara_video.web.detector import YellowBoxDetector
-from aqara_video.web.models import LabeledInterval, ScanResult, VideoDetectionSummary
+from api.config import BOX_DETECTION_FILE, SCAN_RESULT_FILE, VIDEO_DIR
+from api.detector import YellowBoxDetector
+from api.models import LabeledInterval, ScanResult, VideoDetectionSummary
 
 logging.basicConfig(level=logging.INFO)
 

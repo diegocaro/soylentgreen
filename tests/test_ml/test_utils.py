@@ -1,5 +1,3 @@
-from typing import Tuple
-
 import numpy as np
 import pytest
 
@@ -45,8 +43,8 @@ def test_draw_box_with_label_handles_custom_colors(
     """Test that custom colors are properly applied."""
     image = test_image.copy()
     # OpenCV uses BGR format, so (0, 0, 255) is red
-    custom_box_color: Tuple[int, int, int] = (0, 0, 255)  # Red in BGR format
-    custom_text_color: Tuple[int, int, int] = (255, 255, 255)  # White
+    custom_box_color: tuple[int, int, int] = (0, 0, 255)  # Red in BGR format
+    custom_text_color: tuple[int, int, int] = (255, 255, 255)  # White
 
     draw_box_with_label(
         frame=image,
@@ -91,7 +89,10 @@ def test_draw_boxes_with_predictions_below_threshold(
     """Test that predictions below threshold are not drawn."""
     image = test_image.copy()
     low_score_prediction = Prediction(
-        boxes=[test_box], scores=[0.3], labels=[1], categories=["person"]  # Low score
+        boxes=[test_box],
+        scores=[0.3],
+        labels=[1],
+        categories=["person"],  # Low score
     )
 
     result = draw_boxes(frame=image, predictions=[low_score_prediction], threshold=0.5)
@@ -107,7 +108,9 @@ def test_draw_boxes_with_predictions_above_threshold(
     image = test_image.copy()
 
     result = draw_boxes(
-        frame=image, predictions=[test_prediction], threshold=0.5  # Score is 0.85
+        frame=image,
+        predictions=[test_prediction],
+        threshold=0.5,  # Score is 0.85
     )
 
     # Image should be modified

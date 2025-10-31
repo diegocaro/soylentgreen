@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from queue import Queue
-from typing import Dict, List, Optional
 
 import cv2
 import numpy as np
@@ -24,7 +23,7 @@ def is_graphical_environment():
     return True
 
 
-def dynamic_range(frame: ImageCV) -> Dict[str, float]:
+def dynamic_range(frame: ImageCV) -> dict[str, float]:
     """
     Analyze the dynamic range in a frame.
 
@@ -73,7 +72,7 @@ def dynamic_range(frame: ImageCV) -> Dict[str, float]:
 
 def post_process(
     frame: ImageCV,
-    features: Dict[str, float],
+    features: dict[str, float],
     green_threshold: float = 0.2,
 ) -> ImageCV:
     if frame is None:
@@ -123,7 +122,7 @@ class Timelapse:
     def create_timelapse(
         self,
         output: Path,
-        clips: List[Clip],
+        clips: list[Clip],
         green_threshold: float = 0.2,
     ) -> None:
         # Process in batches of 100
@@ -147,7 +146,7 @@ class Timelapse:
             for i in range(0, len(clips), batch_size):
                 batch = clips[i : i + batch_size]
                 print(
-                    f"Processing batch {i//batch_size + 1}/{(len(clips)-1)//batch_size + 1}"
+                    f"Processing batch {i // batch_size + 1}/{(len(clips) - 1) // batch_size + 1}"
                 )
 
                 batch_frames = Parallel(n_jobs=-1, verbose=10, return_as="generator")(
@@ -169,7 +168,7 @@ class Timelapse:
 
 
 class VideoPlayer:
-    def show(self, clips: List[Clip]) -> None:
+    def show(self, clips: list[Clip]) -> None:
         for clip in clips:
             print(clip)
             frame = clip.read_frame()
@@ -186,7 +185,7 @@ class VideoPlayer:
         if cv2.waitKey(1) & 0xFF == ord("q"):
             exit()
 
-    def show_threaded(self, clips: List[Clip], num_workers: int = 4) -> None:
+    def show_threaded(self, clips: list[Clip], num_workers: int = 4) -> None:
         frame_queue = Queue(maxsize=1000)
 
         def read_frame(clip: Clip):
@@ -208,8 +207,8 @@ class VideoPlayer:
                     print(clip)
                     print(f"Progress: {frames_processed}/{total_frames}")
 
-    def show_threaded_old(self, clips: List[Clip]) -> None:
-        def read_frames(clips: List[Clip], frame_queue: Queue):
+    def show_threaded_old(self, clips: list[Clip]) -> None:
+        def read_frames(clips: list[Clip], frame_queue: Queue):
             for clip in clips:
                 frame = clip.read_frame()
                 frame_queue.put(frame)
@@ -229,7 +228,7 @@ class VideoPlayer:
 
         draw_frames(frame_queue)
 
-    def show_joblib(self, clips: List[Clip], green_threshold: float = 0.2) -> None:
+    def show_joblib(self, clips: list[Clip], green_threshold: float = 0.2) -> None:
         def process(clip: Clip) -> ImageCV:
             frame = clip.read_frame()
             features = dynamic_range(frame)
@@ -244,7 +243,7 @@ class VideoPlayer:
             self.draw(frame)
 
 
-def parse_datetime(date_str: str) -> Optional[datetime]:
+def parse_datetime(date_str: str) -> datetime | None:
     if not date_str:
         return None
     date_str = date_str.strip().strip("-")

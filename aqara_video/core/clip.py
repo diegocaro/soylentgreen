@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator
+from collections.abc import Iterator
 
 from .types import ImageCV
 from .video_reader import VideoFrame, VideoMetadata, VideoReader

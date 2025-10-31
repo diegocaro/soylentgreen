@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -16,15 +16,15 @@ from aqara_video.core.video_reader import (
 
 
 @pytest.fixture
-def sample_video_metadata() -> Dict[str, Any]:
+def sample_video_metadata() -> dict[str, Any]:
     """Fixture to provide sample video metadata from JSON file."""
     json_path = Path(__file__).parent / "sample_video_metadata.json"
-    with open(json_path, "r") as f:
+    with open(json_path) as f:
         return json.load(f)
 
 
 @pytest.fixture
-def mock_video_stream(sample_video_metadata: Dict[str, Any]) -> VideoStream:
+def mock_video_stream(sample_video_metadata: dict[str, Any]) -> VideoStream:
     """Fixture to create a real VideoStream object from sample metadata."""
     video_stream_data = next(
         stream
@@ -35,7 +35,7 @@ def mock_video_stream(sample_video_metadata: Dict[str, Any]) -> VideoStream:
 
 
 @pytest.fixture
-def mock_format(sample_video_metadata: Dict[str, Any]) -> Format:
+def mock_format(sample_video_metadata: dict[str, Any]) -> Format:
     """Fixture to create a real Format object from sample metadata."""
     return Format(**sample_video_metadata["format"])
 
@@ -51,7 +51,7 @@ def mock_video_metadata(
 class MockProcess:
     """Mock class for ffmpeg process."""
 
-    def __init__(self, frames: List[np.ndarray]):
+    def __init__(self, frames: list[np.ndarray]):
         self.frames = frames
         self.frame_index = 0
         self.stdout = self
@@ -73,7 +73,7 @@ class MockProcess:
         pass
 
 
-def test_video_metadata_from_dict(sample_video_metadata: Dict[str, Any]) -> None:
+def test_video_metadata_from_dict(sample_video_metadata: dict[str, Any]) -> None:
     """Test creating VideoMetadata from a dictionary."""
     metadata = VideoMetadata.from_dict(sample_video_metadata)
 
@@ -90,7 +90,7 @@ def test_video_metadata_from_dict(sample_video_metadata: Dict[str, Any]) -> None
     assert metadata.format.bit_rate == "2527600"
 
 
-def test_get_best_stream(sample_video_metadata: Dict[str, Any]) -> None:
+def test_get_best_stream(sample_video_metadata: dict[str, Any]) -> None:
     """Test getting the best video stream."""
     metadata = VideoMetadata.from_dict(sample_video_metadata)
     best_stream = metadata.get_best_stream()
@@ -103,7 +103,7 @@ def test_get_best_stream(sample_video_metadata: Dict[str, Any]) -> None:
 
 
 def test_get_best_stream_no_video_streams(
-    sample_video_metadata: Dict[str, Any],
+    sample_video_metadata: dict[str, Any],
 ) -> None:
     """Test getting the best video stream when no video streams are available."""
 
@@ -125,7 +125,7 @@ def test_video_reader_initialization() -> None:
 
 @patch("ffmpeg.probe")
 def test_video_reader_metadata(
-    mock_probe: Mock, sample_video_metadata: Dict[str, Any]
+    mock_probe: Mock, sample_video_metadata: dict[str, Any]
 ) -> None:
     """Test the metadata property of VideoReader."""
     mock_probe.return_value = sample_video_metadata
@@ -141,7 +141,7 @@ def test_video_reader_metadata(
 
 @patch("ffmpeg.probe")
 def test_video_reader_properties(
-    mock_probe: Mock, sample_video_metadata: Dict[str, Any]
+    mock_probe: Mock, sample_video_metadata: dict[str, Any]
 ) -> None:
     """Test the properties of VideoReader."""
     mock_probe.return_value = sample_video_metadata
@@ -161,7 +161,7 @@ def test_video_reader_properties(
 @patch("ffmpeg.input")
 @patch("ffmpeg.probe")
 def test_read_frame_sync(
-    mock_probe: Mock, mock_input: Mock, sample_video_metadata: Dict[str, Any]
+    mock_probe: Mock, mock_input: Mock, sample_video_metadata: dict[str, Any]
 ) -> None:
     """Test reading a frame synchronously."""
     # Mock ffmpeg.probe
@@ -199,7 +199,7 @@ def test_read_frame_async() -> None:
 @patch("ffmpeg.input")
 @patch("ffmpeg.probe")
 def test_frames_generator(
-    mock_probe: Mock, mock_input: Mock, sample_video_metadata: Dict[str, Any]
+    mock_probe: Mock, mock_input: Mock, sample_video_metadata: dict[str, Any]
 ) -> None:
     """Test the frames generator method."""
     # Mock ffmpeg.probe

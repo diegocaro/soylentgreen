@@ -4,14 +4,9 @@ from datetime import datetime
 from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 
-from aqara_video.web.config import (
-    CAMERA_MAP,
-    LABELS_TIMELINE_FILE,
-    SCAN_RESULT_FILE,
-    VIDEO_DIR,
-)
-from aqara_video.web.models import CameraInfo, CameraLabels, LabelsByCamera, ScanResult
-from aqara_video.web.service import Service
+from api.config import CAMERA_MAP, LABELS_TIMELINE_FILE, SCAN_RESULT_FILE, VIDEO_DIR
+from api.models import CameraInfo, CameraLabels, LabelsByCamera, ScanResult
+from api.service import Service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

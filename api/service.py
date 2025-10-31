@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from aqara_video.web.models import (
+from api.models import (
     CameraInfo,
     CameraLabels,
     LabelsByCamera,

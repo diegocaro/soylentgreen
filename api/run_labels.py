@@ -3,12 +3,8 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from aqara_video.web.config import (
-    BOX_DETECTION_FILE,
-    LABELS_TIMELINE_FILE,
-    SCAN_RESULT_FILE,
-)
-from aqara_video.web.models import (
+from api.config import BOX_DETECTION_FILE, LABELS_TIMELINE_FILE, SCAN_RESULT_FILE
+from api.models import (
     CameraLabels,
     IntervalTimestamp,
     LabelsByCamera,

@@ -1,7 +1,8 @@
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from queue import Queue
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import torch
 from IPython.display import display
@@ -38,9 +39,7 @@ FinishCallback = Callable[[], None]
 class VideoProcessor:
     """Handles video loading and processing logic separate from the UI."""
 
-    def __init__(
-        self, videos_path: Path, cameras_names: Optional[Dict[str, str]] = None
-    ):
+    def __init__(self, videos_path: Path, cameras_names: dict[str, str] | None = None):
         """
         Initialize the Video Processor
 
@@ -54,11 +53,11 @@ class VideoProcessor:
             cameras_names = MAPPING_CAMERAS
         self.mapping_cameras = cameras_names
 
-        self.clips: List[Clip] = []
+        self.clips: list[Clip] = []
         self.clip_queue: Queue[Clip] = Queue(maxsize=1000)
         self.first_frame_only: bool = True  # Default to showing only first frame
         self.paused: bool = True  # Start in paused state
-        self.current_clip_index: Optional[int] = None  # Track current clip index
+        self.current_clip_index: int | None = None  # Track current clip index
         self.resume_playback: bool = False
 
         # Object detection settings
@@ -68,9 +67,9 @@ class VideoProcessor:
         self.detector = None  # Lazy initialization for detector
 
         # Define callback handlers
-        self.on_clip_loaded: Optional[ClipCallback] = None
-        self.on_frame_ready: Optional[FrameCallback] = None
-        self.on_clip_finished: Optional[FinishCallback] = None
+        self.on_clip_loaded: ClipCallback | None = None
+        self.on_frame_ready: FrameCallback | None = None
+        self.on_clip_finished: FinishCallback | None = None
 
         # Start video processing thread
         self.loop = threading.Thread(
@@ -80,23 +79,23 @@ class VideoProcessor:
         self.loop.start()
 
     @property
-    def cameras(self) -> List[Tuple[str, Path]]:
+    def cameras(self) -> list[tuple[str, Path]]:
         """Get a list of available cameras with their human-readable names."""
         return [
             (self.mapping_cameras.get(c, c), self.videos_path / c)
             for c in AqaraProvider.cameras_in_dir(self.videos_path)
         ]
 
-    def load_clips_for_camera(self, camera_path: Path) -> List[Clip]:
+    def load_clips_for_camera(self, camera_path: Path) -> list[Clip]:
         """Load all clips for a specific camera."""
         self.clips = TimelineFactory.create_timeline(camera_path).clips
         return self.clips
 
-    def get_unique_days(self) -> List[Any]:
+    def get_unique_days(self) -> list[Any]:
         """Get the unique days for which clips are available."""
         return sorted(list(set(c.timestamp.date() for c in self.clips)))
 
-    def get_clips_for_day(self, selected_day: Any) -> List[Tuple[str, int]]:
+    def get_clips_for_day(self, selected_day: Any) -> list[tuple[str, int]]:
         """Get clips for a selected day formatted as (time_str, index)."""
         minutes = [
             (c.timestamp.strftime("%H:%M:%S"), index)
@@ -204,9 +203,7 @@ class VideoProcessor:
 class JupyterViewerUI:
     """Handles the UI components and user interaction for viewing videos in Jupyter."""
 
-    def __init__(
-        self, videos_path: Path, cameras_names: Optional[Dict[str, str]] = None
-    ):
+    def __init__(self, videos_path: Path, cameras_names: dict[str, str] | None = None):
         """
         Initialize the Jupyter Viewer UI
 
@@ -352,7 +349,7 @@ class JupyterViewerUI:
         if self.selector_minutes.index + 1 < len(self.selector_minutes.options):
             self.selector_minutes.index += 1
 
-    def toggle_first_frame_only(self, change: Dict[str, Any]) -> None:
+    def toggle_first_frame_only(self, change: dict[str, Any]) -> None:
         """Toggle the first frame only setting in the processor."""
         self.processor.first_frame_only = change["new"]
 
@@ -360,7 +357,7 @@ class JupyterViewerUI:
         if self.selector_minutes.value is not None:
             self.processor.queue_clip(self.selector_minutes.value)
 
-    def toggle_object_detection(self, change: Dict[str, Any]) -> None:
+    def toggle_object_detection(self, change: dict[str, Any]) -> None:
         """Toggle the object detection setting in the processor."""
         self.processor.detect_objects = change["new"]
 
@@ -402,7 +399,7 @@ class JupyterViewerUI:
         )
 
     @classmethod
-    def create_from_path(cls, videos_path: Union[Path, str]) -> "JupyterViewerUI":
+    def create_from_path(cls, videos_path: Path | str) -> "JupyterViewerUI":
         """
         Create and display a Jupyter viewer widget
 

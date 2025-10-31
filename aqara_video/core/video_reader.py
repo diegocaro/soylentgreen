@@ -1,8 +1,9 @@
 """Module for video reading using ffmpeg."""
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any
 
 import ffmpeg
 import numpy as np
@@ -64,13 +65,13 @@ class VideoStream(Stream):
     bits_per_raw_sample: str
     nb_frames: str
     extradata_size: int
-    disposition: Dict[str, int]
-    tags: Dict[str, str]
+    disposition: dict[str, int]
+    tags: dict[str, str]
 
     def __post_init__(self) -> None:
-        assert (
-            self.codec_type == "video"
-        ), f"Expected codec_type 'video', got {self.codec_type}"
+        assert self.codec_type == "video", (
+            f"Expected codec_type 'video', got {self.codec_type}"
+        )
 
 
 @dataclass
@@ -88,14 +89,14 @@ class Format:
     size: str
     bit_rate: str
     probe_score: int
-    tags: Dict[str, str]
+    tags: dict[str, str]
 
 
 @dataclass
 class VideoMetadata:
     """Represents the complete ffprobe metadata for a video file."""
 
-    streams: List[VideoStream]
+    streams: list[VideoStream]
     format: Format
 
     @classmethod
@@ -135,7 +136,7 @@ class VideoReader:
         if not path.exists():
             raise FileNotFoundError(f"Video file not found: {path}")
         self.path = path
-        self._metadata: Optional[VideoMetadata] = None
+        self._metadata: VideoMetadata | None = None
 
     @property
     def metadata(self) -> VideoMetadata:
@@ -200,7 +201,7 @@ class VideoReader:
     def read_frame(
         self,
         time_sec: float = 0.0,
-        stream_index: Optional[int] = None,
+        stream_index: int | None = None,
         do_async: bool = False,
     ) -> ImageCV:
         """
@@ -264,7 +265,7 @@ class VideoReader:
 
     def frames(
         self,
-        stream_index: Optional[int] = None,
+        stream_index: int | None = None,
         buffer_size: int = 1,
         frame_skip: int = 1,
     ) -> Iterator[VideoFrame]:
@@ -318,7 +319,7 @@ class VideoReader:
     def frames_with_precise_timestamp(
         self,
         start_time: float = 0.0,
-        stream_index: Optional[int] = None,
+        stream_index: int | None = None,
         buffer_size: int = 1,
     ) -> Iterator[VideoFrame]:
         """

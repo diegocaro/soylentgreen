@@ -36,7 +36,7 @@ class VideoWriter:
         self.framerate = framerate
         self.crf = crf
         self.vcodec = vcodec
-        self.process: Optional[subprocess.Popen[bytes]] = None
+        self.process: subprocess.Popen[bytes] | None = None
 
     def open(self) -> None:
         """
@@ -62,7 +62,7 @@ class VideoWriter:
             .run_async(pipe_stdin=True)
         )
 
-    def write_frame(self, frame: Optional[ImageCV]) -> None:
+    def write_frame(self, frame: ImageCV | None) -> None:
         """
         Write a frame to the video.
 

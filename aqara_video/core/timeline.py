@@ -1,6 +1,5 @@
 from datetime import date, datetime
 from pathlib import Path
-from typing import List, Optional
 
 from .clip import Clip
 from .provider import CameraProvider
@@ -33,14 +32,14 @@ class Timeline:
     def __init__(self, clips_path: Path, provider: CameraProvider):
         self.clips_path = clips_path
         self.provider = provider
-        self._clips: Optional[List[Clip]] = None  # Lazy load clips
+        self._clips: list[Clip] | None = None  # Lazy load clips
 
         self.camera_id = self.clips_path.name
         if not self.provider.validate_directory(self.clips_path):
             raise InvalidCameraDirError(self.clips_path)
 
     @property
-    def clips(self) -> List[Clip]:
+    def clips(self) -> list[Clip]:
         """Return the list of clips in the timeline."""
         if self._clips is None:
             self._clips = self.provider.load_clips(self.clips_path)
@@ -55,17 +54,16 @@ class Timeline:
     def __str__(self) -> str:
         return "\n".join(str(clip) for clip in self.clips)
 
-    def get_available_dates(self) -> List[date]:
+    def get_available_dates(self) -> list[date]:
         """Return a list of available dates in the timeline."""
         dates = {clip.timestamp.date() for clip in self.clips}
         return sorted(list(dates))
 
     def search_clips(
-        self, date_from: Optional[datetime] = None, date_to: Optional[datetime] = None
-    ) -> List[Clip]:
-
+        self, date_from: datetime | None = None, date_to: datetime | None = None
+    ) -> list[Clip]:
         # Should improve this!!!! although the N is pretty small
-        clips: List[Clip] = []
+        clips: list[Clip] = []
         for clip in self.clips:
             if date_from and clip.timestamp < date_from:
                 continue

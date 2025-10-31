@@ -1,9 +1,9 @@
 import logging
 from datetime import datetime
 
-from aqara_video.web.config import SCAN_RESULT_FILE, VIDEO_DIR
-from aqara_video.web.models import ScanResult
-from aqara_video.web.scan import ScanManager
+from api.config import SCAN_RESULT_FILE, VIDEO_DIR
+from api.models import ScanResult
+from api.scan import ScanManager
 
 logging.basicConfig(level=logging.INFO)
 

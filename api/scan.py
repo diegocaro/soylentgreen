@@ -1,11 +1,11 @@
 import logging
 from pathlib import Path
 
+from api.config import CLIP_DURATION
+from api.models import VideoList, VideoSegment
 from aqara_video.core.clip import Clip
 from aqara_video.core.factory import TimelineFactory
 from aqara_video.providers.aqara import AqaraProvider
-from aqara_video.web.config import CLIP_DURATION
-from aqara_video.web.models import VideoList, VideoSegment
 
 logging.basicConfig(level=logging.INFO)
 
