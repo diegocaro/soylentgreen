@@ -61,3 +61,4 @@ ignore = [
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "standard"
+ignore = ["tests"]
