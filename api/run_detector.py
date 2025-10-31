@@ -1,3 +1,4 @@
+import argparse
 import logging
 
 from api.config import BOX_DETECTION_FILE, SCAN_RESULT_FILE, VIDEO_DIR
@@ -24,11 +25,24 @@ def save_detections(detections: VideoDetectionSummary):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run yellow box detection on videos.")
+    parser.add_argument(
+        "--camera",
+        "-c",
+        nargs="*",
+        help="Camera ID(s) to process. If not set, all cameras will be processed.",
+    )
+    args = parser.parse_args()
+
     detections = load_detections()
     yellow_box_detector = YellowBoxDetector()
     scan_result = ScanResult.model_validate_json(SCAN_RESULT_FILE.read_text())
 
+    selected_cameras = set(args.camera) if args.camera else None
+
     for camera_id, video_list in scan_result.cameras.items():
+        if selected_cameras and camera_id not in selected_cameras:
+            continue
         logger.info(f"Processing camera: {camera_id}")
         for segment in video_list.segments:
             video_path = VIDEO_DIR / segment.path
