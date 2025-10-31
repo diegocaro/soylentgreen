@@ -16,6 +16,11 @@ from aqara_video.core.video_reader import (
 
 
 @pytest.fixture
+def mock_path_exist(monkeypatch):
+    monkeypatch.setattr(Path, "exists", lambda self: True)
+
+
+@pytest.fixture
 def sample_video_metadata() -> dict[str, Any]:
     """Fixture to provide sample video metadata from JSON file."""
     json_path = Path(__file__).parent / "sample_video_metadata.json"
@@ -114,7 +119,7 @@ def test_get_best_stream_no_video_streams(
         metadata.get_best_stream()
 
 
-def test_video_reader_initialization() -> None:
+def test_video_reader_initialization(mock_path_exist):
     """Test VideoReader initialization."""
     path = Path("/path/to/test.mp4")
     reader = VideoReader(path)
@@ -125,7 +130,7 @@ def test_video_reader_initialization() -> None:
 
 @patch("ffmpeg.probe")
 def test_video_reader_metadata(
-    mock_probe: Mock, sample_video_metadata: dict[str, Any]
+    mock_probe: Mock, sample_video_metadata: dict[str, Any], mock_path_exist
 ) -> None:
     """Test the metadata property of VideoReader."""
     mock_probe.return_value = sample_video_metadata
@@ -141,7 +146,7 @@ def test_video_reader_metadata(
 
 @patch("ffmpeg.probe")
 def test_video_reader_properties(
-    mock_probe: Mock, sample_video_metadata: dict[str, Any]
+    mock_probe: Mock, sample_video_metadata: dict[str, Any], mock_path_exist
 ) -> None:
     """Test the properties of VideoReader."""
     mock_probe.return_value = sample_video_metadata
@@ -161,7 +166,10 @@ def test_video_reader_properties(
 @patch("ffmpeg.input")
 @patch("ffmpeg.probe")
 def test_read_frame_sync(
-    mock_probe: Mock, mock_input: Mock, sample_video_metadata: dict[str, Any]
+    mock_probe: Mock,
+    mock_input: Mock,
+    sample_video_metadata: dict[str, Any],
+    mock_path_exist,
 ) -> None:
     """Test reading a frame synchronously."""
     # Mock ffmpeg.probe
@@ -188,7 +196,7 @@ def test_read_frame_sync(
     assert frame.shape == (1080, 1920, 3)
 
 
-def test_read_frame_async() -> None:
+def test_read_frame_async(mock_path_exist) -> None:
     """Test that reading a frame asynchronously raises NotImplementedError."""
     reader = VideoReader(Path("/path/to/test.mp4"))
 
@@ -199,7 +207,10 @@ def test_read_frame_async() -> None:
 @patch("ffmpeg.input")
 @patch("ffmpeg.probe")
 def test_frames_generator(
-    mock_probe: Mock, mock_input: Mock, sample_video_metadata: dict[str, Any]
+    mock_probe: Mock,
+    mock_input: Mock,
+    sample_video_metadata: dict[str, Any],
+    mock_path_exist,
 ) -> None:
     """Test the frames generator method."""
     # Mock ffmpeg.probe
@@ -235,7 +246,7 @@ def test_frames_generator(
         assert np.all(frame.frame == i)
 
 
-def test_frames_buffer_size_not_implemented() -> None:
+def test_frames_buffer_size_not_implemented(mock_path_exist) -> None:
     """Test that using frames with buffer_size > 1 raises NotImplementedError."""
     reader = VideoReader(Path("/path/to/test.mp4"))
 
@@ -243,7 +254,7 @@ def test_frames_buffer_size_not_implemented() -> None:
         list(reader.frames(buffer_size=2))
 
 
-def test_bytes_to_frame() -> None:
+def test_bytes_to_frame(mock_path_exist) -> None:
     """Test converting bytes to a frame."""
     reader = VideoReader(Path("/path/to/test.mp4"))
 
