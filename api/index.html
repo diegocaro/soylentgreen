@@ -468,7 +468,7 @@ async function initTimeline() {
     const player = activePlayer();
     const seekTimestamp = player.dataset.seekTimestamp;
     
-    if (!seekTimestamp || player.paused) {
+    if (!seekTimestamp) {
       document.getElementById('currentTimeIndicator').style.display = 'none';
       return;
     }
@@ -477,8 +477,9 @@ async function initTimeline() {
     const videoOffset = parseFloat(player.dataset.videoOffset || 0);
     const currentVideoTime = player.currentTime || 0;
     
-    if (isNaN(currentVideoTime) || currentVideoTime === 0) {
-      return; // Video hasn't started yet
+    if (isNaN(currentVideoTime)) {
+      document.getElementById('currentTimeIndicator').style.display = 'none';
+      return;
     }
     
     const elapsedFromStart = currentVideoTime - videoOffset;
