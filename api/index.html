@@ -55,7 +55,7 @@
           pointer-events: none;
           z-index: 1000;
           top: 0;
-          bottom: 0;
+          height: 100%;
           box-shadow: 0 0 5px rgba(255, 0, 0, 0.5);
         }
         .availability-marker {
@@ -237,10 +237,11 @@ async function initTimeline() {
   const labels = await labelsRes.json();
   window._sg_labels = labels;
 
-  // Build items using vis.DataSet: video segments as background, labels as default
+  // Build groups and items using vis.DataSet
+  const groups = new vis.DataSet();
   const items = new vis.DataSet();
   
-  // Add video segments as background type
+  // Add video segments as background type (no group)
   intervals.forEach((interval, i) => {
     items.add({
       id: 'segment_' + i,
@@ -252,17 +253,29 @@ async function initTimeline() {
     });
   });
   
-  // Add labels as default type (range/box)
+  // Create groups for each label type
   if (labels && labels.labels) {
+    Object.keys(labels.labels).forEach(labelName => {
+      groups.add({
+        id: labelName,
+        content: labelName,
+        className: 'label-group-' + labelName,
+        style: `background-color: ${getLabelColor(labelName)}; border-color: ${getLabelBorderColor(labelName)};`
+      });
+    });
+    
+    // Add label items to their respective groups
     Object.entries(labels.labels).forEach(([labelName, labelTimeline]) => {
       labelTimeline.intervals.forEach((interval, j) => {
         items.add({
           id: `label_${labelName}_${j}`,
-          content: labelName,
+          content: '',
           start: interval.start,
           end: interval.end,
           type: 'range',
-          className: 'label-item label-' + labelName
+          group: labelName,
+          className: 'label-item label-' + labelName,
+          style: `background-color: ${getLabelColor(labelName)}; border-color: ${getLabelBorderColor(labelName)};`
         });
       });
     });
@@ -304,7 +317,7 @@ async function initTimeline() {
   const tooltip = document.getElementById('timeTooltip');
   const scrubLine = document.getElementById('scrubLine');
 
-  const timeline = new vis.Timeline(container, items, {
+  const timeline = new vis.Timeline(container, items, groups, {
     selectable: true,
     zoomMin: 1000 * 60 * 5,
     zoomMax: 1000 * 60 * 60 * 24,
@@ -506,13 +519,21 @@ async function initTimeline() {
       // Update playback indicator position on timeline
       const timelineRange = timeline.getWindow();
       const container = document.getElementById('timeline');
-      const containerWidth = container.clientWidth;
+      
+      // Get the content area (vis-center) which contains the actual timeline items
+      const centerPanel = container.querySelector('.vis-center');
+      if (!centerPanel) return;
+      
+      const containerWidth = centerPanel.clientWidth;
       const timeSpan = timelineRange.end - timelineRange.start;
       
       // Check if current time is within visible range
       if (actualTime >= timelineRange.start && actualTime <= timelineRange.end) {
         const offset = (actualTime - timelineRange.start) / timeSpan;
-        playbackIndicator.style.left = (offset * containerWidth) + 'px';
+        
+        // Position relative to the center panel's left edge
+        const centerLeft = centerPanel.getBoundingClientRect().left - container.getBoundingClientRect().left;
+        playbackIndicator.style.left = (centerLeft + offset * containerWidth) + 'px';
         playbackIndicator.style.display = 'block';
       } else {
         playbackIndicator.style.display = 'none';
