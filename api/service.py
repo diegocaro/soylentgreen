@@ -80,6 +80,7 @@ class Service:
         rounded_search = False
         if not result:
             # search with the target rounded to the next second
+            logger.info("No exact match found, trying rounded search")
             rounded_search = True
             target_rounded = target.replace(microsecond=0) + timedelta(seconds=1)
             result = self._search(cameras.segments, target_rounded)
