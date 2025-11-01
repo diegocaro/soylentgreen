@@ -81,7 +81,7 @@ class Format:
     filename: str
     nb_streams: int
     nb_programs: int
-    nb_stream_groups: int
+    nb_stream_groups: int | None
     format_name: str
     format_long_name: str
     start_time: str
