@@ -9,7 +9,7 @@
         .header { display: flex; justify-content: space-between; align-items: center;  }
         .header h2 { margin-top: 0; }
         .camera-selector { text-align: right; }
-        #overviewTimeline { border: 1px solid #ccc; cursor: pointer; position: relative; margin-bottom: 10px; background: #f5f5f5; }
+        #overviewTimeline { border: 1px solid #ccc; border-bottom: none; cursor: pointer; position: relative; background: #f5f5f5; }
         #overviewTimeline .vis-text { font-size: 9px; }
 /*       #overviewTimeline .vis-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } */
         #detailRangeIndicator {
@@ -23,7 +23,7 @@
           z-index: 10;
           cursor: move;
         }
-        #timeline { border: 1px solid #ccc; cursor: pointer; position: relative; }
+        #timeline { border: 1px solid #ccc; border-top: none; cursor: pointer; position: relative; margin-bottom: 10px; }
         video { margin-top: 20px; width: 720px; height: 405px; }
         .timeTooltip {
           position: absolute;
@@ -282,7 +282,7 @@ async function initTimeline() {
     stack: false,
     showCurrentTime: false,
     showMajorLabels: true,
-    showMinorLabels: false,
+    showMinorLabels: true,
     locale: 'es'
   });
   
@@ -303,7 +303,10 @@ async function initTimeline() {
     zoomMin: 1000 * 60 * 5,
     zoomMax: 1000 * 60 * 60 * 24,
     stack: false,
-    showCurrentTime: true
+    showCurrentTime: false,
+    locale: 'es',
+    showMajorLabels: false,
+    showMinorLabels: true
   });
   
   // Render labels on detailed timeline after it's ready
