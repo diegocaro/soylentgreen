@@ -61,8 +61,13 @@ class Service:
         for i, segment in enumerate(segments):
             start = segment.start
             end = segment.end
+
             if start <= target < end:
                 found_at = i
+                break
+
+            if return_next and start > target:
+                found_at = i - 1
                 break
 
         if found_at is not None:
