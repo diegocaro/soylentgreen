@@ -11,6 +11,7 @@
         .camera-selector { text-align: right; }
         #overviewTimeline { border: 1px solid #ccc; border-bottom: none; cursor: pointer; position: relative; background: #f5f5f5; }
         #overviewTimeline .vis-text { font-size: 9px; }
+        #timeline .vis-text { font-size: 9px; }
 /*       #overviewTimeline .vis-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } */
         #detailRangeIndicator {
           position: absolute;
@@ -291,8 +292,8 @@ async function initTimeline() {
     zoomMax: 1000 * 60 * 60 * 24 * 365, // 1 year maximum
     stack: false,
     showCurrentTime: false,
-    showMajorLabels: true,
-    showMinorLabels: true,
+    showMajorLabels: false,
+    showMinorLabels: false,
     locale: 'es'
   });
 
@@ -310,7 +311,7 @@ async function initTimeline() {
     stack: false,
     showCurrentTime: false,
     locale: 'es',
-    showMajorLabels: false,
+    showMajorLabels: true,
     showMinorLabels: true
   });
 
