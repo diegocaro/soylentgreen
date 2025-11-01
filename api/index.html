@@ -47,6 +47,16 @@
           top: 0;
           bottom: 0;
         }
+        .playbackIndicator {
+          position: absolute;
+          width: 3px;
+          background: rgba(255, 0, 0, 0.9);
+          pointer-events: none;
+          z-index: 1000;
+          top: 0;
+          bottom: 0;
+          box-shadow: 0 0 5px rgba(255, 0, 0, 0.5);
+        }
         .availability-marker {
           position: absolute;
           bottom: 0;
@@ -82,6 +92,19 @@
           vertical-align: middle;
           border: 1px solid rgba(0, 0, 0, 0.2);
         }
+        .time-indicator {
+          font-size: 24px;
+          font-weight: bold;
+          color: #333;
+          font-family: 'Courier New', monospace;
+          background: rgba(255, 255, 255, 0.95);
+          padding: 15px 20px;
+          border-radius: 8px;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+          margin-left: 20px;
+          float: right;
+        }
+
       </style>
     </head>
     <body>
@@ -104,8 +127,10 @@
         <div id="timeline"></div>
         <div id="scrubLine" class="scrubLine"></div>
         <div id="timeTooltip" class="timeTooltip"></div>
+        <div id="playbackIndicator" class="playbackIndicator"></div>
       </div>
       <div id="labelLegend" class="label-legend"></div>
+      <div class="time-indicator" id="timeIndicator">---------- --:--:--</div>
       <div id="playerContainer" style="position:relative; width:720px; height:405px;">
         <video id="playerA" controls playsinline style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:2; transition: opacity 300ms;" ></video>
         <video id="playerB" controls playsinline style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:1; transition: opacity 300ms;" ></video>
@@ -338,6 +363,7 @@ async function initTimeline() {
   timeline.on('rangechange', () => {
     updateDetailRangeIndicator();
     renderLabelMarkers(container, labels, timeline);
+    updateTimeIndicator();
   });
   
   overviewTimeline.on('rangechange', () => {
@@ -478,6 +504,55 @@ async function initTimeline() {
     const seconds = date.getSeconds().toString().padStart(2, '0');
     return `${hours}:${minutes}:${seconds}`;
   }
+
+  // Format date and time for display
+  function formatDateTime(date) {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const seconds = date.getSeconds().toString().padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
+
+  // Update time indicator based on current video playback
+  function updateTimeIndicator() {
+    const player = activePlayer();
+    const timeIndicator = document.getElementById('timeIndicator');
+    const playbackIndicator = document.getElementById('playbackIndicator');
+    const timeline = window._sg_timeline;
+    
+    if (player && player.dataset.seekTimestamp && !player.paused && timeline) {
+      const seekTimestamp = new Date(player.dataset.seekTimestamp);
+      const videoOffset = parseFloat(player.dataset.videoOffset || 0);
+      const currentTime = player.currentTime;
+      
+      // Calculate actual playback time
+      const actualTime = new Date(seekTimestamp.getTime() + (currentTime - videoOffset) * 1000);
+      timeIndicator.textContent = formatDateTime(actualTime);
+      
+      // Update playback indicator position on timeline
+      const timelineRange = timeline.getWindow();
+      const container = document.getElementById('timeline');
+      const containerWidth = container.clientWidth;
+      const timeSpan = timelineRange.end - timelineRange.start;
+      
+      // Check if current time is within visible range
+      if (actualTime >= timelineRange.start && actualTime <= timelineRange.end) {
+        const offset = (actualTime - timelineRange.start) / timeSpan;
+        playbackIndicator.style.left = (offset * containerWidth) + 'px';
+        playbackIndicator.style.display = 'block';
+      } else {
+        playbackIndicator.style.display = 'none';
+      }
+    } else {
+      playbackIndicator.style.display = 'none';
+    }
+  }
+
+  // Start updating time indicator
+  setInterval(updateTimeIndicator, 100);
 
   // Handle mouse move over timeline for scrubbing preview
   container.addEventListener('mousemove', (event) => {
