@@ -429,8 +429,8 @@ class TimelineManager {
     }
   }
 
-  update(camera_id, intervals, labels) {
-    // Store new camera window before updating
+  update(camera_id, intervals, labels, keepWindow = false) {
+    // Store current window before updating
     const currentWindow = this.timeline ? this.timeline.getWindow() : null;
     
     // Update data
@@ -446,8 +446,12 @@ class TimelineManager {
       this.timeline.setGroups(groups);
       this.timeline.setItems(items);
       
-      // Set window to show middle of new data
-      if (intervals.length > 0) {
+      // Keep current window or set to middle of new data
+      if (keepWindow && currentWindow) {
+        // Preserve the exact same window position
+        this.timeline.setWindow(currentWindow.start, currentWindow.end, {animation: false});
+      } else if (intervals.length > 0) {
+        // Set window to show middle of new data
         const firstStart = new Date(intervals[0].start).getTime();
         const lastEnd = new Date(intervals[intervals.length - 1].end).getTime();
         const middleTime = new Date((firstStart + lastEnd) / 2);
@@ -572,7 +576,7 @@ async function loadCameras() {
     const currentTime = window.videoPlayer ? window.videoPlayer.getCurrentTime() : null;
     
     camera_id = e.target.value;
-    await initTimeline();
+    await initTimeline(true); // Keep the same window position
     
     // If we had a playback time, seek to that time in the new camera
     if (currentTime && window.loadAndPlay) {
@@ -613,7 +617,7 @@ function updateLabelLegend(labels) {
   });
 }
 
-async function initTimeline() {
+async function initTimeline(keepWindow = false) {
   if (!camera_id) return;
   
   const res = await fetch('/list-intervals?camera_id=' + encodeURIComponent(camera_id));
@@ -629,7 +633,7 @@ async function initTimeline() {
   // Update or create timeline manager
   if (window.timelineManager) {
     // Update existing timeline with new data (smooth transition)
-    window.timelineManager.update(camera_id, intervals, labels);
+    window.timelineManager.update(camera_id, intervals, labels, keepWindow);
   } else {
     // Create and initialize timeline manager for the first time
     window.timelineManager = new TimelineManager(camera_id, intervals, labels);
