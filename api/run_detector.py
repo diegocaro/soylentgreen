@@ -1,7 +1,7 @@
 import argparse
 import logging
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any, Optional
 
 from joblib import Parallel, delayed
 
@@ -58,7 +58,6 @@ def process_segment(
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser(description="Run yellow box detection on videos.")
     parser.add_argument(
         "--camera",
