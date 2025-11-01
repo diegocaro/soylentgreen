@@ -49,16 +49,34 @@ class Service:
         return full_path
 
     def _search(
-        self, segments: list[VideoSegment], target: datetime
+        self, segments: list[VideoSegment], target: datetime, return_next: bool = False
     ) -> VideoSegment | None:
-        for segment in segments:
+
+        # assert segments are sorted by start time
+        assert all(
+            segments[i].start <= segments[i + 1].start for i in range(len(segments) - 1)
+        )
+
+        found_at = None
+        for i, segment in enumerate(segments):
             start = segment.start
             end = segment.end
             if start <= target < end:
-                return segment
+                found_at = i
+                break
+
+        if found_at is not None:
+            index = (
+                found_at + 1
+                if return_next and found_at + 1 < len(segments)
+                else found_at
+            )
+            return segments[index]
         return None
 
-    def seek(self, camera_id: str, target: datetime) -> SeekResult | None:
+    def seek(
+        self, camera_id: str, target: datetime, return_next: bool = False
+    ) -> SeekResult | None:
         """
         Given an absolute time (ISO string), find which clip covers it and the offset in seconds.
         """
@@ -76,19 +94,22 @@ class Service:
 
         cameras = self._scan_result.cameras[camera_id]
 
-        result = self._search(cameras.segments, target)
-        rounded_search = False
-        if not result:
-            # search with the target rounded to the next second
-            logger.info("No exact match found, trying rounded search")
-            rounded_search = True
-            target_rounded = target.replace(microsecond=0) + timedelta(seconds=1)
-            result = self._search(cameras.segments, target_rounded)
+        result = self._search(cameras.segments, target, return_next=return_next)
+        # rounded_search = False
+        # if not result:
+        #     # search with the target rounded to the next second
+        #     logger.info("No exact match found, trying rounded search")
+        #     rounded_search = True
+        #     target_rounded = target.replace(microsecond=0) + timedelta(seconds=1)
+        #     result = self._search(
+        #         cameras.segments, target_rounded
+        #     )
 
         if result:
             start = result.start
             offset = (target - start).total_seconds()
-            if rounded_search:
+            # if rounded_search or return_next:
+            if return_next:
                 offset = 0
             return SeekResult(
                 path=result.path,

@@ -607,9 +607,9 @@ async function initTimeline() {
     const playedDuration = videoDuration - videoOffset;
     const endTime = new Date(startTime.getTime() + playedDuration * 1000);
     
-    // Seek to the exact end time (don't skip any content)
-    const t = endTime.toISOString();
-    const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id));
+    // Seek to the beginning of the next video using return_next=true
+    const t = startTime.toISOString();
+    const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id) + '&return_next=true');
     if (!resp.ok) return;
     const { path, offset } = await resp.json();
     
@@ -630,9 +630,9 @@ async function initTimeline() {
     const playedDuration = videoDuration - videoOffset;
     const endTime = new Date(startTime.getTime() + playedDuration * 1000);
     
-    // Seek to the exact end time (don't skip any content)
-    const t = endTime.toISOString();
-    const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id));
+    // Seek to the beginning of the next video using return_next=true
+    const t = startTime.toISOString();
+    const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id) + '&return_next=true');
     if (!resp.ok) return;
     const { path, offset } = await resp.json();
     

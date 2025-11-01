@@ -59,9 +59,14 @@ def get_video(path: str, service: Service = Depends(get_service)):
 
 
 @app.get("/seek")
-def seek(camera_id: str, time: str, service: Service = Depends(get_service)):
+def seek(
+    camera_id: str,
+    time: str,
+    return_next: bool = False,
+    service: Service = Depends(get_service),
+):
     target = datetime.fromisoformat(time)
-    result = service.seek(camera_id, target)
+    result = service.seek(camera_id, target, return_next=return_next)
     if result:
         return result
     return JSONResponse({"error": "no clip found"}, status_code=404)
