@@ -78,6 +78,17 @@
           border-color: rgba(156, 39, 176, 0.7) !important;
         }
         
+        /* Always show groups with minimum height */
+        .vis-timeline .vis-labelset .vis-label {
+          min-height: 30px !important;
+          height: 30px !important;
+        }
+        
+        .vis-timeline .vis-foreground .vis-group {
+          min-height: 30px !important;
+          height: 30px !important;
+        }
+        
         /* Specific label colors override default */
         .vis-labelset .vis-label.label-group-box,
         .vis-item.label-item.label-box {
@@ -163,6 +174,7 @@
         <div id="detailRangeIndicator"></div>
         <div id="overviewScrubLine" class="scrubLine"></div>
         <div id="overviewTooltip" class="timeTooltip"></div>
+        <div id="overviewPlaybackIndicator" class="playbackIndicator"></div>
       </div>
       <div style="position: relative;">
         <div id="timeline"></div>
@@ -227,6 +239,9 @@ class TimelineManager {
       locale: 'es',
       showMajorLabels: true,
       showMinorLabels: true,
+      groupOrder: 'id',
+      groupHeightMode: 'fixed',
+      orientation: { item: 'top' },
       onInitialDrawComplete: () => {
         if (this.intervals.length > 0) {
           const firstStart = new Date(this.intervals[0].start).getTime();
@@ -371,30 +386,47 @@ class TimelineManager {
   updatePlaybackIndicator(actualTime) {
     if (!actualTime) {
       document.getElementById('playbackIndicator').style.display = 'none';
+      document.getElementById('overviewPlaybackIndicator').style.display = 'none';
       document.getElementById('timeIndicator').textContent = '';
       return;
     }
 
     const playbackIndicator = document.getElementById('playbackIndicator');
+    const overviewPlaybackIndicator = document.getElementById('overviewPlaybackIndicator');
     const timeIndicator = document.getElementById('timeIndicator');
     const container = document.getElementById('timeline');
+    const overviewContainer = document.getElementById('overviewTimeline');
     
     timeIndicator.textContent = this.formatDateTime(actualTime);
     
+    // Update detail timeline indicator
     const timelineRange = this.timeline.getWindow();
     const centerPanel = container.querySelector('.vis-center');
-    if (!centerPanel) return;
+    if (centerPanel) {
+      const containerWidth = centerPanel.clientWidth;
+      const timeSpan = timelineRange.end - timelineRange.start;
+      
+      if (actualTime >= timelineRange.start && actualTime <= timelineRange.end) {
+        const offset = (actualTime - timelineRange.start) / timeSpan;
+        const centerLeft = centerPanel.getBoundingClientRect().left - container.getBoundingClientRect().left;
+        playbackIndicator.style.left = (centerLeft + offset * containerWidth) + 'px';
+        playbackIndicator.style.display = 'block';
+      } else {
+        playbackIndicator.style.display = 'none';
+      }
+    }
     
-    const containerWidth = centerPanel.clientWidth;
-    const timeSpan = timelineRange.end - timelineRange.start;
+    // Update overview timeline indicator
+    const overviewRange = this.overviewTimeline.getWindow();
+    const overviewWidth = overviewContainer.clientWidth;
+    const overviewSpan = overviewRange.end - overviewRange.start;
     
-    if (actualTime >= timelineRange.start && actualTime <= timelineRange.end) {
-      const offset = (actualTime - timelineRange.start) / timeSpan;
-      const centerLeft = centerPanel.getBoundingClientRect().left - container.getBoundingClientRect().left;
-      playbackIndicator.style.left = (centerLeft + offset * containerWidth) + 'px';
-      playbackIndicator.style.display = 'block';
+    if (actualTime >= overviewRange.start && actualTime <= overviewRange.end) {
+      const overviewOffset = (actualTime - overviewRange.start) / overviewSpan;
+      overviewPlaybackIndicator.style.left = (overviewOffset * overviewWidth) + 'px';
+      overviewPlaybackIndicator.style.display = 'block';
     } else {
-      playbackIndicator.style.display = 'none';
+      overviewPlaybackIndicator.style.display = 'none';
     }
   }
 
