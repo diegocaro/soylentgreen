@@ -48,6 +48,16 @@ class Service:
             raise ValueError("Invalid video path")
         return full_path
 
+    def _search(
+        self, segments: list[VideoSegment], target: datetime
+    ) -> VideoSegment | None:
+        for segment in segments:
+            start = segment.start
+            end = segment.end
+            if start <= target < end:
+                return segment
+        return None
+
     def seek(self, camera_id: str, target: datetime) -> SeekResult | None:
         """
         Given an absolute time (ISO string), find which clip covers it and the offset in seconds.
@@ -65,44 +75,57 @@ class Service:
         # TODO: Preprocess the datetime fromisoformat
 
         cameras = self._scan_result.cameras[camera_id]
-        for segment in cameras.segments:
-            start = segment.start
-            end = segment.end
-            if start <= target < end:
-                offset = (target - start).total_seconds()
-                return SeekResult(
-                    path=segment.path,
-                    offset=offset,
-                )
+
+        result = self._search(cameras.segments, target)
+        rounded_search = False
+        if not result:
+            # search with the target rounded to the next second
+            rounded_search = True
+            target_rounded = target.replace(microsecond=0) + timedelta(seconds=1)
+            result = self._search(cameras.segments, target_rounded)
+
+        if result:
+            start = result.start
+            offset = (target - start).total_seconds()
+            if rounded_search:
+                offset = 0
+            return SeekResult(
+                path=result.path,
+                offset=offset,
+            )
 
         return None
 
     def get_labels_timeline(self, camera_id: str) -> CameraLabels:
         return self._labels_timeline.cameras.get(camera_id, CameraLabels(labels={}))
 
-    def list_intervals(self, camera_id: str, max_gap_seconds: int = 30) -> list[TimeInterval]:
+    def list_intervals(
+        self, camera_id: str, max_gap_seconds: int = 30
+    ) -> list[TimeInterval]:
         """
         Get merged time intervals for a camera where video clips exist.
         Segments at most max_gap_seconds apart are merged into one interval.
         """
         camera = self._scan_result.cameras[camera_id]
         segments = sorted(camera.segments, key=lambda s: s.start)
-        
+
         if not segments:
             return []
-        
+
         merged_intervals = []
         current_start = segments[0].start
         current_end = segments[0].end
-        
+
         for segment in segments[1:]:
             gap = (segment.start - current_end).total_seconds()
             if gap <= max_gap_seconds:
                 current_end = max(current_end, segment.end)
             else:
-                merged_intervals.append(TimeInterval(start=current_start, end=current_end))
+                merged_intervals.append(
+                    TimeInterval(start=current_start, end=current_end)
+                )
                 current_start = segment.start
                 current_end = segment.end
-        
+
         merged_intervals.append(TimeInterval(start=current_start, end=current_end))
         return merged_intervals
