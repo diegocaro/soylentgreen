@@ -69,9 +69,9 @@ class VideoStream(Stream):
     tags: dict[str, str]
 
     def __post_init__(self) -> None:
-        assert self.codec_type == "video", (
-            f"Expected codec_type 'video', got {self.codec_type}"
-        )
+        assert (
+            self.codec_type == "video"
+        ), f"Expected codec_type 'video', got {self.codec_type}"
 
 
 @dataclass
@@ -81,7 +81,6 @@ class Format:
     filename: str
     nb_streams: int
     nb_programs: int
-    nb_stream_groups: int | None
     format_name: str
     format_long_name: str
     start_time: str
@@ -90,6 +89,7 @@ class Format:
     bit_rate: str
     probe_score: int
     tags: dict[str, str]
+    nb_stream_groups: int | None = None
 
 
 @dataclass
