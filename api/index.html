@@ -70,6 +70,33 @@
           background-color: rgba(153, 207, 255, 0.4);
           border: none;
         }
+        
+        /* Label group and item colors - default for all */
+        .vis-labelset .vis-label[class*="label-group-"],
+        .vis-item.label-item[class*="label-"] {
+          background-color: rgba(156, 39, 176, 0.3) !important;
+          border-color: rgba(156, 39, 176, 0.7) !important;
+        }
+        
+        /* Specific label colors override default */
+        .vis-labelset .vis-label.label-group-box,
+        .vis-item.label-item.label-box {
+          background-color: rgba(255, 152, 0, 0.3) !important;
+          border-color: rgba(255, 152, 0, 0.7) !important;
+        }
+        
+        .vis-labelset .vis-label.label-group-person,
+        .vis-item.label-item.label-person {
+          background-color: rgba(33, 150, 243, 0.3) !important;
+          border-color: rgba(33, 150, 243, 0.7) !important;
+        }
+        
+        .vis-labelset .vis-label.label-group-car,
+        .vis-item.label-item.label-car {
+          background-color: rgba(244, 67, 54, 0.3) !important;
+          border-color: rgba(244, 67, 54, 0.7) !important;
+        }
+        
         .label-legend {
           margin-top: 10px;
           margin-bottom: 15px;
@@ -87,6 +114,24 @@
           margin-right: 5px;
           vertical-align: middle;
           border: 1px solid rgba(0, 0, 0, 0.2);
+        }
+        /* Default color for all labels */
+        .label-legend-color[class*="label-"] {
+          background-color: rgba(156, 39, 176, 0.3);
+          border-color: rgba(156, 39, 176, 0.7);
+        }
+        /* Specific label colors override default */
+        .label-legend-color.label-box {
+          background-color: rgba(255, 152, 0, 0.3);
+          border-color: rgba(255, 152, 0, 0.7);
+        }
+        .label-legend-color.label-person {
+          background-color: rgba(33, 150, 243, 0.3);
+          border-color: rgba(33, 150, 243, 0.7);
+        }
+        .label-legend-color.label-car {
+          background-color: rgba(244, 67, 54, 0.3);
+          border-color: rgba(244, 67, 54, 0.7);
         }
         .time-indicator {
           font-size: 24px;
@@ -134,29 +179,6 @@
 
 <script>
 let camera_id = null;
-
-// Label color mapping
-const LABEL_COLORS = {
-  'box': 'rgba(255, 152, 0, 0.3)',
-  'person': 'rgba(33, 150, 243, 0.3)',
-  'car': 'rgba(244, 67, 54, 0.3)',
-  'default': 'rgba(156, 39, 176, 0.3)'
-};
-
-const LABEL_BORDER_COLORS = {
-  'box': 'rgba(255, 152, 0, 0.7)',
-  'person': 'rgba(33, 150, 243, 0.7)',
-  'car': 'rgba(244, 67, 54, 0.7)',
-  'default': 'rgba(156, 39, 176, 0.7)'
-};
-
-function getLabelColor(labelName) {
-  return LABEL_COLORS[labelName] || LABEL_COLORS['default'];
-}
-
-function getLabelBorderColor(labelName) {
-  return LABEL_BORDER_COLORS[labelName] || LABEL_BORDER_COLORS['default'];
-}
 
 async function loadCameras() {
   const res = await fetch('/cameras');
@@ -206,9 +228,7 @@ function updateLabelLegend(labels) {
     item.className = 'label-legend-item';
     
     const colorBox = document.createElement('span');
-    colorBox.className = 'label-legend-color';
-    colorBox.style.background = getLabelColor(labelName);
-    colorBox.style.borderColor = getLabelBorderColor(labelName);
+    colorBox.className = 'label-legend-color label-' + labelName;
     
     item.appendChild(colorBox);
     item.appendChild(document.createTextNode(labelName));
@@ -259,8 +279,7 @@ async function initTimeline() {
       groups.add({
         id: labelName,
         content: labelName,
-        className: 'label-group-' + labelName,
-        style: `background-color: ${getLabelColor(labelName)}; border-color: ${getLabelBorderColor(labelName)};`
+        className: 'label-group-' + labelName
       });
     });
     
@@ -274,8 +293,7 @@ async function initTimeline() {
           end: interval.end,
           type: 'range',
           group: labelName,
-          className: 'label-item label-' + labelName,
-          style: `background-color: ${getLabelColor(labelName)}; border-color: ${getLabelBorderColor(labelName)};`
+          className: 'label-item label-' + labelName
         });
       });
     });
