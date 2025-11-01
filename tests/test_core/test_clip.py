@@ -1,6 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Protocol
+from typing import Any
 from unittest.mock import Mock
 
 import pytest
@@ -64,7 +64,7 @@ def mock_video_reader(
 
 
 @pytest.fixture
-def clip_data() -> Dict[str, Any]:
+def clip_data() -> dict[str, Any]:
     """Fixture providing common test data for clips."""
     return {
         "camera_id": "camera1",
@@ -74,7 +74,7 @@ def clip_data() -> Dict[str, Any]:
 
 
 def test_clip_initialization_and_attributes(
-    mock_video_reader: Mock, clip_data: Dict[str, Any]
+    mock_video_reader: Mock, clip_data: dict[str, Any]
 ) -> None:
     """Test that the Clip is initialized with the correct attributes and string representation."""
     clip = Clip(
@@ -97,10 +97,10 @@ def test_clip_initialization_and_attributes(
 
     # Test immutability
     with pytest.raises(AttributeError):
-        clip.camera_id = "new_camera"
+        clip.camera_id = "new_camera"  # type: ignore[attr-defined]
 
 
-def test_video_properties(mock_video_reader: Mock, clip_data: Dict[str, Any]) -> None:
+def test_video_properties(mock_video_reader: Mock, clip_data: dict[str, Any]) -> None:
     """Test that the Clip correctly forwards properties from VideoReader."""
     clip = Clip(
         camera_id=clip_data["camera_id"],
@@ -116,7 +116,7 @@ def test_video_properties(mock_video_reader: Mock, clip_data: Dict[str, Any]) ->
 
 
 def test_video_frame_operations(
-    mock_video_reader: Mock, clip_data: Dict[str, Any]
+    mock_video_reader: Mock, clip_data: dict[str, Any]
 ) -> None:
     """Test the frame reading and iteration methods."""
     clip = Clip(

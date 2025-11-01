@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import List
 
 from .clip import Clip
 
@@ -20,7 +19,7 @@ class CameraProvider(ABC):
         pass
 
     @abstractmethod
-    def load_clips(self, path: Path) -> List[Clip]:
+    def load_clips(self, path: Path) -> list[Clip]:
         """Load clips from the given path."""
         pass
 

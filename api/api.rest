@@ -1,0 +1,24 @@
+@host = localhost:8000
+
+GET /cameras HTTP/1.1
+Host: {{host}}
+
+###
+
+GET /list?camera_id=lumi1.54ef44603857 HTTP/1.1
+Host: {{host}}
+
+###
+
+GET /list-intervals?camera_id=lumi1.54ef44603857 HTTP/1.1
+Host: {{host}}
+
+###
+GET /seek?camera_id=lumi1.54ef44603857&time=2025-10-20T21:02:13-03:00 HTTP/1.1
+Host: {{host}}
+
+###
+
+GET /labels?camera_id=lumi1.54ef44457bc9 HTTP/1.1
+Host: {{host}}
+

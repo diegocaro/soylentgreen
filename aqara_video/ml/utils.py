@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
 
 import cv2
 from torch import Tensor
@@ -17,10 +16,10 @@ class Box:
 
 @dataclass
 class Prediction:
-    boxes: List[Box]
-    scores: List[float]
-    labels: List[int]
-    categories: List[str]
+    boxes: list[Box]
+    scores: list[float]
+    labels: list[int]
+    categories: list[str]
 
 
 def draw_box_with_label(
@@ -28,8 +27,8 @@ def draw_box_with_label(
     box: Box,
     label: str,
     score: float,
-    box_color: Tuple[int, int, int] = (0, 255, 0),
-    text_color: Tuple[int, int, int] = (0, 0, 0),
+    box_color: tuple[int, int, int] = (0, 255, 0),
+    text_color: tuple[int, int, int] = (0, 0, 0),
 ) -> None:
     """
     Draw a bounding box with a label on an image.
@@ -98,7 +97,7 @@ def draw_box_with_label(
 
 
 def draw_boxes(
-    frame: ImageCV, predictions: List[Prediction], threshold: float = 0.5
+    frame: ImageCV, predictions: list[Prediction], threshold: float = 0.5
 ) -> ImageCV:
     """
     Draw bounding boxes on an image based on object detection predictions.
@@ -128,8 +127,8 @@ def draw_boxes(
 
 
 def to_predictions(
-    model_output: List[Dict[str, Tensor]], categories: List[str]
-) -> List[Prediction]:
+    model_output: list[dict[str, Tensor]], categories: list[str]
+) -> list[Prediction]:
     """
     Convert the model output tensors to a list of strongly-typed Prediction objects.
 

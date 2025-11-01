@@ -1,6 +1,5 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
-import cv2
 import torch
 from torchvision import models, transforms
 
@@ -44,8 +43,8 @@ class Detector:
         self.batch_size = batch_size
         # Pre-allocate the transform once
         self._transform = transforms.Compose([transforms.ToTensor()])
-        self.frame_buffer: List[ImageCV] = []
-        self.frame_ids_buffer: List[int] = []
+        self.frame_buffer: list[ImageCV] = []
+        self.frame_ids_buffer: list[int] = []
 
     def transform(self) -> transforms.Compose:
         """Return the image transformation pipeline for preprocessing (legacy method)."""
@@ -63,10 +62,10 @@ class Detector:
         """
         # Use the optimized preprocessing approach
         rgb_frame = bgr_to_rgb(image)
-        image_tensor = self._transform(rgb_frame).to(self.device)
+        image_tensor = self._transform(rgb_frame).to(self.device)  # type: ignore
         return image_tensor
 
-    def preprocess_batch(self, frames: List[ImageCV]) -> List[torch.Tensor]:
+    def preprocess_batch(self, frames: list[ImageCV]) -> list[torch.Tensor]:
         """
         Process multiple frames at once.
 
@@ -81,11 +80,11 @@ class Detector:
             # Convert BGR to RGB using our centralized function
             rgb_frame = bgr_to_rgb(frame)
             # Convert to tensor
-            tensor = self._transform(rgb_frame).to(self.device)
+            tensor = self._transform(rgb_frame).to(self.device)  # type: ignore
             tensors.append(tensor)
         return tensors
 
-    def predict(self, image_tensor: torch.Tensor) -> List[Prediction]:
+    def predict(self, image_tensor: torch.Tensor) -> list[Prediction]:
         """
         Make object detection predictions on a single preprocessed image tensor.
         Legacy method for backward compatibility.
@@ -108,8 +107,8 @@ class Detector:
             return to_predictions(predictions, self.labels)
 
     def predict_batch(
-        self, frame_ids: List[int], frames: List[ImageCV]
-    ) -> List[Tuple[int, List[Dict[str, Any]]]]:
+        self, frame_ids: list[int], frames: list[ImageCV]
+    ) -> list[tuple[int, list[dict[str, Any]]]]:
         """
         Predict on a batch of frames.
 
@@ -142,7 +141,7 @@ class Detector:
 
         return results
 
-    def add_to_batch(self, frame_id: int, frame: ImageCV) -> List[Prediction]:
+    def add_to_batch(self, frame_id: int, frame: ImageCV) -> list[Prediction]:
         """
         Add a frame to the batch buffer.
 
@@ -163,10 +162,10 @@ class Detector:
             # Clear buffers
             self.frame_buffer = []
             self.frame_ids_buffer = []
-            return results
+            return results  # type: ignore
         return []
 
-    def flush_batch(self) -> List[Prediction]:
+    def flush_batch(self) -> list[Prediction]:
         """
         Process any remaining frames in the buffer.
 
@@ -180,4 +179,4 @@ class Detector:
         # Clear buffers
         self.frame_buffer = []
         self.frame_ids_buffer = []
-        return results
+        return results  # type: ignore

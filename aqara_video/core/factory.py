@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List
 
 from ..providers.aqara import AqaraProvider
 from .provider import CameraProvider
@@ -9,7 +8,7 @@ from .timeline import Timeline, TimelineError
 class NoCompatibleProviderError(TimelineError):
     """Exception raised when no provider can handle the given directory."""
 
-    def __init__(self, path: Path, available_providers: List[CameraProvider]):
+    def __init__(self, path: Path, available_providers: list[CameraProvider]):
         provider_names = [
             provider.__class__.__name__ for provider in available_providers
         ]
@@ -24,7 +23,7 @@ class NoCompatibleProviderError(TimelineError):
 class TimelineFactory:
     """Factory for creating timelines with the appropriate provider."""
 
-    PROVIDERS: List[CameraProvider] = [AqaraProvider()]
+    PROVIDERS: list[CameraProvider] = [AqaraProvider()]
 
     @classmethod
     def create_timeline(cls, clips_path: Path) -> Timeline:

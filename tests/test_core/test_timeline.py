@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 from unittest.mock import Mock
 
 import pytest
@@ -27,7 +27,7 @@ def mock_provider() -> Mock:
 
 
 @pytest.fixture
-def timeline_data() -> Dict[str, Any]:
+def timeline_data() -> dict[str, Any]:
     """Fixture providing common test data for timeline."""
     return {
         "clips_path": Path("/test/camera/lumi1.54ef44457bc9"),
@@ -35,7 +35,7 @@ def timeline_data() -> Dict[str, Any]:
 
 
 def test_timeline_initialization(
-    mock_provider: Mock, timeline_data: Dict[str, Any]
+    mock_provider: Mock, timeline_data: dict[str, Any]
 ) -> None:
     """Test that Timeline is initialized correctly with valid inputs."""
     timeline = Timeline(
@@ -59,7 +59,7 @@ def test_timeline_initialization(
 
 
 def test_timeline_invalid_directory(
-    mock_provider: Mock, timeline_data: Dict[str, Any]
+    mock_provider: Mock, timeline_data: dict[str, Any]
 ) -> None:
     """Test that Timeline raises an exception with invalid directory."""
     # Configure the mock to indicate an invalid directory
@@ -77,7 +77,7 @@ def test_timeline_invalid_directory(
 
 
 def test_timeline_lazy_loading(
-    mock_provider: Mock, timeline_data: Dict[str, Any]
+    mock_provider: Mock, timeline_data: dict[str, Any]
 ) -> None:
     """Test that clips are loaded lazily only when accessed."""
     timeline = Timeline(
@@ -107,7 +107,7 @@ def test_timeline_lazy_loading(
 
 
 def test_timeline_get_available_dates(
-    mock_provider: Mock, timeline_data: Dict[str, Any]
+    mock_provider: Mock, timeline_data: dict[str, Any]
 ) -> None:
     """Test that available dates are correctly extracted from clips."""
     timeline = Timeline(
@@ -126,7 +126,7 @@ def test_timeline_get_available_dates(
 
 
 def test_timeline_search_clips_no_filter(
-    mock_provider: Mock, timeline_data: Dict[str, Any]
+    mock_provider: Mock, timeline_data: dict[str, Any]
 ) -> None:
     """Test searching clips without date filters."""
     timeline = Timeline(
@@ -143,7 +143,7 @@ def test_timeline_search_clips_no_filter(
 
 
 def test_timeline_search_clips_with_from_date(
-    mock_provider: Mock, timeline_data: Dict[str, Any]
+    mock_provider: Mock, timeline_data: dict[str, Any]
 ) -> None:
     """Test searching clips with from_date filter."""
     timeline = Timeline(
@@ -161,7 +161,7 @@ def test_timeline_search_clips_with_from_date(
 
 
 def test_timeline_search_clips_with_to_date(
-    mock_provider: Mock, timeline_data: Dict[str, Any]
+    mock_provider: Mock, timeline_data: dict[str, Any]
 ) -> None:
     """Test searching clips with to_date filter."""
     timeline = Timeline(
@@ -179,7 +179,7 @@ def test_timeline_search_clips_with_to_date(
 
 
 def test_timeline_search_clips_with_date_range(
-    mock_provider: Mock, timeline_data: Dict[str, Any]
+    mock_provider: Mock, timeline_data: dict[str, Any]
 ) -> None:
     """Test searching clips with both from_date and to_date filters."""
     timeline = Timeline(
@@ -198,7 +198,7 @@ def test_timeline_search_clips_with_date_range(
 
 
 def test_timeline_str_representation(
-    mock_provider: Mock, timeline_data: Dict[str, Any]
+    mock_provider: Mock, timeline_data: dict[str, Any]
 ) -> None:
     """Test the string representation of Timeline."""
     # Create custom mock clips with specific string representations
@@ -227,7 +227,7 @@ def test_timeline_str_representation(
     assert str(timeline) == expected_str
 
 
-def test_timeline_length(mock_provider: Mock, timeline_data: Dict[str, Any]) -> None:
+def test_timeline_length(mock_provider: Mock, timeline_data: dict[str, Any]) -> None:
     """Test the length calculation of Timeline."""
     timeline = Timeline(
         clips_path=timeline_data["clips_path"],
