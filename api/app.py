@@ -5,10 +5,19 @@ from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 
 from api.config import CAMERA_MAP, LABELS_TIMELINE_FILE, SCAN_RESULT_FILE, VIDEO_DIR
-from api.models import CameraInfo, CameraLabels, LabelsByCamera, ScanResult, TimeInterval
+from api.models import (
+    CameraInfo,
+    CameraLabels,
+    LabelsByCamera,
+    ScanResult,
+    TimeInterval,
+)
 from api.service import Service
 
-logging.basicConfig(level=logging.INFO)
+# Configure logging with timestamp
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s:      %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -64,5 +73,7 @@ def get_labels(camera_id: str, service: Service = Depends(get_service)) -> Camer
 
 
 @app.get("/list-intervals")
-def list_intervals(camera_id: str, service: Service = Depends(get_service)) -> list[TimeInterval]:
+def list_intervals(
+    camera_id: str, service: Service = Depends(get_service)
+) -> list[TimeInterval]:
     return service.list_intervals(camera_id=camera_id)
