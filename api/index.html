@@ -403,6 +403,14 @@ async function initTimeline() {
   const playerB = document.getElementById('playerB');
   let active = 'A'; // which player is currently visible/active
 
+  // Remove old event listeners if they exist
+  if (window._sg_playerAEndedHandler) {
+    playerA.removeEventListener('ended', window._sg_playerAEndedHandler);
+  }
+  if (window._sg_playerBEndedHandler) {
+    playerB.removeEventListener('ended', window._sg_playerBEndedHandler);
+  }
+
   function activePlayer() { return active === 'A' ? playerA : playerB; }
   function inactivePlayer() { return active === 'A' ? playerB : playerA; }
 
@@ -502,7 +510,7 @@ async function initTimeline() {
   };
 
   // When video ends, find the next available video and play it
-  playerA.addEventListener('ended', async () => {
+  const playerAEndedHandler = async () => {
     if (active !== 'A') return; // only respond if A is active
     
     // Calculate what time this video ended at
@@ -523,9 +531,9 @@ async function initTimeline() {
     const { path, offset } = await resp.json();
     
     await loadAndPlay(path, offset || 0, endTime);
-  });
+  };
 
-  playerB.addEventListener('ended', async () => {
+  const playerBEndedHandler = async () => {
     if (active !== 'B') return; // only respond if B is active
     
     // Calculate what time this video ended at
@@ -546,7 +554,15 @@ async function initTimeline() {
     const { path, offset } = await resp.json();
     
     await loadAndPlay(path, offset || 0, endTime);
-  });
+  };
+
+  // Store handlers globally so we can remove them later
+  window._sg_playerAEndedHandler = playerAEndedHandler;
+  window._sg_playerBEndedHandler = playerBEndedHandler;
+
+  // Add event listeners
+  playerA.addEventListener('ended', playerAEndedHandler);
+  playerB.addEventListener('ended', playerBEndedHandler);
 }
 
 // Initialize app
