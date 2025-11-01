@@ -322,10 +322,12 @@ async function initTimeline() {
     zoomMin: 1000 * 60 * 60 * 24, // 1 day minimum
     zoomMax: 1000 * 60 * 60 * 24 * 365, // 1 year maximum
     stack: false,
+    scrollable: false,
     showCurrentTime: false,
     showMajorLabels: false,
     showMinorLabels: false,
-    locale: 'es'
+    locale: 'es',
+    height: '20px'
   });
 
   window._sg_overviewTimeline = overviewTimeline;
