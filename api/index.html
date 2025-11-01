@@ -9,7 +9,9 @@
         .header { display: flex; justify-content: space-between; align-items: center;  }
         .header h2 { margin-top: 0; }
         .camera-selector { text-align: right; }
-        #overviewTimeline { border: 1px solid #ccc; height: 80px; cursor: pointer; position: relative; margin-bottom: 10px; background: #f5f5f5; }
+        #overviewTimeline { border: 1px solid #ccc; height: 35px; cursor: pointer; position: relative; margin-bottom: 10px; background: #f5f5f5; }
+        #overviewTimeline .vis-text { font-size: 10px; }
+        #overviewTimeline .vis-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         #detailRangeIndicator {
           position: absolute;
           top: 0;
@@ -17,8 +19,9 @@
           background: rgba(33, 150, 243, 0.2);
           border-left: 2px solid rgba(33, 150, 243, 0.8);
           border-right: 2px solid rgba(33, 150, 243, 0.8);
-          pointer-events: none;
+          pointer-events: auto;
           z-index: 10;
+          cursor: move;
         }
         #timeline { border: 1px solid #ccc; height: 100px; cursor: pointer; position: relative; }
         video { margin-top: 20px; width: 720px; height: 405px; }
@@ -79,11 +82,6 @@
           vertical-align: middle;
           border: 1px solid rgba(0, 0, 0, 0.2);
         }
-        .timeline-label {
-          font-size: 11px;
-          color: #666;
-          margin-bottom: 3px;
-        }
       </style>
     </head>
     <body>
@@ -96,14 +94,12 @@
           </select>
         </div>
       </div>
-      <div class="timeline-label">Overview (click to jump to date/time):</div>
       <div style="position: relative;">
         <div id="overviewTimeline"></div>
         <div id="detailRangeIndicator"></div>
         <div id="overviewScrubLine" class="scrubLine"></div>
         <div id="overviewTooltip" class="timeTooltip"></div>
       </div>
-      <div class="timeline-label">Detailed view:</div>
       <div style="position: relative;">
         <div id="timeline"></div>
         <div id="scrubLine" class="scrubLine"></div>
@@ -284,7 +280,7 @@ async function initTimeline() {
     zoomMin: 1000 * 60 * 60 * 24, // 1 day minimum
     zoomMax: 1000 * 60 * 60 * 24 * 365, // 1 year maximum
     stack: false,
-    showCurrentTime: true,
+    showCurrentTime: false,
     showMajorLabels: true,
     showMinorLabels: true
   });
@@ -348,52 +344,60 @@ async function initTimeline() {
   // Initial update
   setTimeout(updateDetailRangeIndicator, 100);
   
-  // Click on overview to jump to that time range and start playing
+  // Make the detail range indicator draggable
+  const indicator = document.getElementById('detailRangeIndicator');
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartTime = 0;
+  
+  indicator.addEventListener('mousedown', (event) => {
+    isDragging = true;
+    dragStartX = event.clientX;
+    const detailRange = timeline.getWindow();
+    dragStartTime = detailRange.start.getTime();
+    event.stopPropagation();
+    event.preventDefault();
+  });
+  
+  document.addEventListener('mousemove', (event) => {
+    if (!isDragging) return;
+    
+    const overviewRange = overviewTimeline.getWindow();
+    const containerWidth = overviewContainer.clientWidth;
+    const overviewSpan = overviewRange.end - overviewRange.start;
+    
+    const deltaX = event.clientX - dragStartX;
+    const deltaTime = (deltaX / containerWidth) * overviewSpan;
+    
+    const detailRange = timeline.getWindow();
+    const windowSize = detailRange.end - detailRange.start;
+    const newStart = new Date(dragStartTime + deltaTime);
+    const newEnd = new Date(newStart.getTime() + windowSize);
+    
+    timeline.setWindow(newStart, newEnd, {animation: false});
+  });
+  
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+  });
+  
+  // Click on overview to center the detailed view on that time (keeping window size)
   overviewContainer.onclick = async (event) => {
+    // Ignore clicks on the detail range indicator
+    if (event.target.id === 'detailRangeIndicator') return;
+    
     const props = overviewTimeline.getEventProperties(event);
     if (!props.time) return;
     
-    // Center the detailed timeline on the clicked time
-    const windowSize = 1000 * 60 * 60; // 1 hour window
+    // Get current window size and center on clicked time
+    const detailRange = timeline.getWindow();
+    const windowSize = detailRange.end - detailRange.start;
     const start = new Date(props.time.getTime() - windowSize / 2);
     const end = new Date(props.time.getTime() + windowSize / 2);
     timeline.setWindow(start, end, {animation: true});
-    
-    // Seek to and play the video at that time
-    const t = props.time.toISOString();
-    const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id));
-    if (!resp.ok) return;
-    const { path, offset } = await resp.json();
-    
-    await loadAndPlay(path, offset || 0, props.time);
   };
   
-  // Handle mouse move over overview timeline
-  overviewContainer.addEventListener('mousemove', (event) => {
-    const props = overviewTimeline.getEventProperties(event);
-    if (props.time) {
-      const timeDate = new Date(props.time);
-      const rect = overviewContainer.getBoundingClientRect();
-      const mouseX = event.clientX - rect.left;
-      
-      // Format date and time
-      const dateStr = timeDate.toLocaleDateString();
-      const timeStr = formatTime(timeDate);
-      
-      overviewTooltip.textContent = `${dateStr} ${timeStr}`;
-      overviewTooltip.style.display = 'block';
-      overviewTooltip.style.left = `${event.clientX - rect.left + 10}px`;
-      overviewTooltip.style.top = `${event.clientY - rect.top - 30}px`;
-      
-      overviewScrubLine.style.display = 'block';
-      overviewScrubLine.style.left = `${mouseX}px`;
-    }
-  });
-  
-  overviewContainer.addEventListener('mouseleave', () => {
-    overviewTooltip.style.display = 'none';
-    overviewScrubLine.style.display = 'none';
-  });
+
 
   // store intervals globally
   window._sg_intervals = intervals;
