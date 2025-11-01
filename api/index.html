@@ -180,6 +180,370 @@
 <script>
 let camera_id = null;
 
+class TimelineManager {
+  constructor(camera_id, intervals, labels) {
+    this.camera_id = camera_id;
+    this.intervals = intervals;
+    this.labels = labels;
+    this.timeline = null;
+    this.overviewTimeline = null;
+    this.isDragging = false;
+    this.dragStartX = 0;
+    this.dragStartTime = 0;
+    this.updateIndicatorInterval = null;
+  }
+
+  init() {
+    this.buildTimelines();
+    this.setupEventListeners();
+    this.startPlaybackIndicator();
+  }
+
+  buildTimelines() {
+    // Build groups and items using vis.DataSet
+    const { groups, items, overviewItems } = this.buildDataSets();
+
+    // Create overview timeline
+    const overviewContainer = document.getElementById('overviewTimeline');
+    this.overviewTimeline = new vis.Timeline(overviewContainer, overviewItems, {
+      selectable: false,
+      zoomMin: 1000 * 60 * 60 * 24,
+      zoomMax: 1000 * 60 * 60 * 24 * 365,
+      stack: false,
+      showCurrentTime: false,
+      showMajorLabels: false,
+      showMinorLabels: false,
+      locale: 'es'
+    });
+
+    // Create detailed timeline
+    const container = document.getElementById('timeline');
+    this.timeline = new vis.Timeline(container, items, groups, {
+      selectable: true,
+      zoomMin: 1000 * 60 * 5,
+      zoomMax: 1000 * 60 * 60 * 24,
+      stack: false,
+      showCurrentTime: false,
+      locale: 'es',
+      showMajorLabels: true,
+      showMinorLabels: true,
+      onInitialDrawComplete: () => {
+        if (this.intervals.length > 0) {
+          const firstStart = new Date(this.intervals[0].start).getTime();
+          const lastEnd = new Date(this.intervals[this.intervals.length - 1].end).getTime();
+          const middleTime = new Date((firstStart + lastEnd) / 2);
+          
+          const windowStart = new Date(middleTime.getTime() - 12 * 60 * 60 * 1000);
+          const windowEnd = new Date(middleTime.getTime() + 12 * 60 * 60 * 1000);
+          this.timeline.setWindow(windowStart, windowEnd, {animation: false});
+        }
+      }
+    });
+  }
+
+  setupEventListeners() {
+    // Sync timelines
+    this.timeline.on('rangechange', () => {
+      this.updateDetailRangeIndicator();
+    });
+    
+    this.overviewTimeline.on('rangechange', () => {
+      this.updateDetailRangeIndicator();
+    });
+    
+    setTimeout(() => this.updateDetailRangeIndicator(), 100);
+
+    // Setup detail range indicator dragging
+    this.setupDetailRangeIndicator();
+
+    // Setup overview click to center
+    this.setupOverviewClick();
+
+    // Setup timeline tooltips
+    this.setupTimelineTooltips();
+  }
+
+  updateDetailRangeIndicator() {
+    const detailRange = this.timeline.getWindow();
+    const overviewRange = this.overviewTimeline.getWindow();
+    const indicator = document.getElementById('detailRangeIndicator');
+    const container = document.getElementById('overviewTimeline');
+    
+    const containerWidth = container.clientWidth;
+    const overviewSpan = overviewRange.end - overviewRange.start;
+    
+    const startOffset = (detailRange.start - overviewRange.start) / overviewSpan;
+    const endOffset = (detailRange.end - overviewRange.start) / overviewSpan;
+    
+    indicator.style.left = (startOffset * containerWidth) + 'px';
+    indicator.style.width = ((endOffset - startOffset) * containerWidth) + 'px';
+  }
+
+  setupDetailRangeIndicator() {
+    const indicator = document.getElementById('detailRangeIndicator');
+    const overviewContainer = document.getElementById('overviewTimeline');
+    
+    indicator.addEventListener('mousedown', (event) => {
+      this.isDragging = true;
+      this.dragStartX = event.clientX;
+      const detailRange = this.timeline.getWindow();
+      this.dragStartTime = detailRange.start.getTime();
+      event.stopPropagation();
+      event.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (event) => {
+      if (!this.isDragging) return;
+      
+      const overviewRange = this.overviewTimeline.getWindow();
+      const containerWidth = overviewContainer.clientWidth;
+      const overviewSpan = overviewRange.end - overviewRange.start;
+      
+      const deltaX = event.clientX - this.dragStartX;
+      const deltaTime = (deltaX / containerWidth) * overviewSpan;
+      
+      const detailRange = this.timeline.getWindow();
+      const windowSize = detailRange.end - detailRange.start;
+      const newStart = new Date(this.dragStartTime + deltaTime);
+      const newEnd = new Date(newStart.getTime() + windowSize);
+      
+      this.timeline.setWindow(newStart, newEnd, {animation: false});
+    });
+    
+    document.addEventListener('mouseup', () => {
+      this.isDragging = false;
+    });
+  }
+
+  setupOverviewClick() {
+    const overviewContainer = document.getElementById('overviewTimeline');
+    
+    overviewContainer.onclick = (event) => {
+      if (event.target.id === 'detailRangeIndicator') return;
+      
+      const props = this.overviewTimeline.getEventProperties(event);
+      if (!props.time) return;
+      
+      const detailRange = this.timeline.getWindow();
+      const windowSize = detailRange.end - detailRange.start;
+      const start = new Date(props.time.getTime() - windowSize / 2);
+      const end = new Date(props.time.getTime() + windowSize / 2);
+      this.timeline.setWindow(start, end, {animation: true});
+    };
+  }
+
+  setupTimelineTooltips() {
+    const container = document.getElementById('timeline');
+    const tooltip = document.getElementById('timeTooltip');
+    const scrubLine = document.getElementById('scrubLine');
+
+    container.addEventListener('mousemove', (event) => {
+      const props = this.timeline.getEventProperties(event);
+      if (props.time) {
+        const timeDate = new Date(props.time);
+        const rect = container.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        
+        tooltip.textContent = this.formatTime(timeDate);
+        tooltip.style.display = 'block';
+        tooltip.style.left = `${event.clientX - rect.left + 10}px`;
+        tooltip.style.top = `${event.clientY - rect.top - 30}px`;
+        
+        scrubLine.style.display = 'block';
+        scrubLine.style.left = `${mouseX}px`;
+      }
+    });
+
+    container.addEventListener('mouseleave', () => {
+      tooltip.style.display = 'none';
+      scrubLine.style.display = 'none';
+    });
+  }
+
+  startPlaybackIndicator() {
+    this.updateIndicatorInterval = setInterval(() => {
+      if (window.videoPlayer) {
+        this.updatePlaybackIndicator(window.videoPlayer.getCurrentTime());
+      }
+    }, 100);
+  }
+
+  updatePlaybackIndicator(actualTime) {
+    if (!actualTime) {
+      document.getElementById('playbackIndicator').style.display = 'none';
+      document.getElementById('timeIndicator').textContent = '';
+      return;
+    }
+
+    const playbackIndicator = document.getElementById('playbackIndicator');
+    const timeIndicator = document.getElementById('timeIndicator');
+    const container = document.getElementById('timeline');
+    
+    timeIndicator.textContent = this.formatDateTime(actualTime);
+    
+    const timelineRange = this.timeline.getWindow();
+    const centerPanel = container.querySelector('.vis-center');
+    if (!centerPanel) return;
+    
+    const containerWidth = centerPanel.clientWidth;
+    const timeSpan = timelineRange.end - timelineRange.start;
+    
+    if (actualTime >= timelineRange.start && actualTime <= timelineRange.end) {
+      const offset = (actualTime - timelineRange.start) / timeSpan;
+      const centerLeft = centerPanel.getBoundingClientRect().left - container.getBoundingClientRect().left;
+      playbackIndicator.style.left = (centerLeft + offset * containerWidth) + 'px';
+      playbackIndicator.style.display = 'block';
+    } else {
+      playbackIndicator.style.display = 'none';
+    }
+  }
+
+  formatTime(date) {
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const seconds = date.getSeconds().toString().padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+  }
+
+  formatDateTime(date) {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const seconds = date.getSeconds().toString().padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
+
+  async handleTimelineClick(event, onSeek) {
+    const props = this.timeline.getEventProperties(event);
+    if (!props.time) return;
+    
+    const t = props.time.toISOString();
+    const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(this.camera_id));
+    if (!resp.ok) return;
+    const { path, offset } = await resp.json();
+    
+    if (onSeek) {
+      await onSeek(path, offset || 0, props.time);
+    }
+  }
+
+  update(camera_id, intervals, labels) {
+    // Store new camera window before updating
+    const currentWindow = this.timeline ? this.timeline.getWindow() : null;
+    
+    // Update data
+    this.camera_id = camera_id;
+    this.intervals = intervals;
+    this.labels = labels;
+    
+    // Rebuild groups and items
+    const { groups, items, overviewItems } = this.buildDataSets();
+    
+    // Update existing timelines instead of destroying
+    if (this.timeline) {
+      this.timeline.setGroups(groups);
+      this.timeline.setItems(items);
+      
+      // Set window to show middle of new data
+      if (intervals.length > 0) {
+        const firstStart = new Date(intervals[0].start).getTime();
+        const lastEnd = new Date(intervals[intervals.length - 1].end).getTime();
+        const middleTime = new Date((firstStart + lastEnd) / 2);
+        
+        const windowStart = new Date(middleTime.getTime() - 12 * 60 * 60 * 1000);
+        const windowEnd = new Date(middleTime.getTime() + 12 * 60 * 60 * 1000);
+        this.timeline.setWindow(windowStart, windowEnd, {animation: true});
+      }
+    }
+    
+    if (this.overviewTimeline) {
+      this.overviewTimeline.setItems(overviewItems);
+    }
+    
+    // Update detail range indicator
+    setTimeout(() => this.updateDetailRangeIndicator(), 100);
+  }
+
+  buildDataSets() {
+    const groups = new vis.DataSet();
+    const items = new vis.DataSet();
+    const overviewItems = new vis.DataSet();
+    
+    // Add video segments as background type (no group)
+    this.intervals.forEach((interval, i) => {
+      items.add({
+        id: 'segment_' + i,
+        content: '',
+        start: interval.start,
+        end: interval.end,
+        type: 'background',
+        className: 'video-segment'
+      });
+      
+      overviewItems.add({
+        id: 'overview_' + i,
+        content: '',
+        start: interval.start,
+        end: interval.end,
+        type: 'background',
+        className: 'overview-item'
+      });
+    });
+    
+    // Create groups for each label type
+    if (this.labels && this.labels.labels) {
+      Object.keys(this.labels.labels).forEach(labelName => {
+        groups.add({
+          id: labelName,
+          content: labelName,
+          className: 'label-group-' + labelName
+        });
+      });
+      
+      // Add label items to their respective groups
+      Object.entries(this.labels.labels).forEach(([labelName, labelTimeline]) => {
+        labelTimeline.intervals.forEach((interval, j) => {
+          items.add({
+            id: `label_${labelName}_${j}`,
+            content: '',
+            start: interval.start,
+            end: interval.end,
+            type: 'range',
+            group: labelName,
+            className: 'label-item label-' + labelName
+          });
+        });
+      });
+    }
+    
+    return { groups, items, overviewItems };
+  }
+
+  destroy() {
+    if (this.updateIndicatorInterval) {
+      clearInterval(this.updateIndicatorInterval);
+    }
+    if (this.timeline) {
+      this.timeline.destroy();
+      this.timeline = null;
+    }
+    if (this.overviewTimeline) {
+      this.overviewTimeline.destroy();
+      this.overviewTimeline = null;
+    }
+  }
+
+  getTimeline() {
+    return this.timeline;
+  }
+
+  getIntervals() {
+    return this.intervals;
+  }
+}
+
 async function loadCameras() {
   const res = await fetch('/cameras');
   const cameras = await res.json();
@@ -239,221 +603,111 @@ function updateLabelLegend(labels) {
 async function initTimeline() {
   if (!camera_id) return;
   
-  // Destroy existing timelines if they exist
-  if (window._sg_timeline) {
-    window._sg_timeline.destroy();
-    window._sg_timeline = null;
-  }
-  if (window._sg_overviewTimeline) {
-    window._sg_overviewTimeline.destroy();
-    window._sg_overviewTimeline = null;
-  }
-  
   const res = await fetch('/list-intervals?camera_id=' + encodeURIComponent(camera_id));
   const intervals = await res.json();
 
   // Fetch labels for this camera
   const labelsRes = await fetch('/labels?camera_id=' + encodeURIComponent(camera_id));
   const labels = await labelsRes.json();
-  window._sg_labels = labels;
-
-  // Build groups and items using vis.DataSet
-  const groups = new vis.DataSet();
-  const items = new vis.DataSet();
   
-  // Add video segments as background type (no group)
-  intervals.forEach((interval, i) => {
-    items.add({
-      id: 'segment_' + i,
-      content: '',
-      start: interval.start,
-      end: interval.end,
-      type: 'background',
-      className: 'video-segment'
-    });
-  });
+  // Update legend
+  updateLabelLegend(labels);
   
-  // Create groups for each label type
-  if (labels && labels.labels) {
-    Object.keys(labels.labels).forEach(labelName => {
-      groups.add({
-        id: labelName,
-        content: labelName,
-        className: 'label-group-' + labelName
-      });
-    });
+  // Update or create timeline manager
+  if (window.timelineManager) {
+    // Update existing timeline with new data (smooth transition)
+    window.timelineManager.update(camera_id, intervals, labels);
+  } else {
+    // Create and initialize timeline manager for the first time
+    window.timelineManager = new TimelineManager(camera_id, intervals, labels);
+    window.timelineManager.init();
     
-    // Add label items to their respective groups
-    Object.entries(labels.labels).forEach(([labelName, labelTimeline]) => {
-      labelTimeline.intervals.forEach((interval, j) => {
-        items.add({
-          id: `label_${labelName}_${j}`,
-          content: '',
-          start: interval.start,
-          end: interval.end,
-          type: 'range',
-          group: labelName,
-          className: 'label-item label-' + labelName
-        });
-      });
-    });
-  }
+    // Setup video player (only needed once)
+    const playerA = document.getElementById('playerA');
+    const playerB = document.getElementById('playerB');
+    let active = 'A';
+    
+    function activePlayer() { return active === 'A' ? playerA : playerB; }
+    function inactivePlayer() { return active === 'A' ? playerB : playerA; }
+    
+    // Helper to load into the inactive player, seek when metadata is ready, play and then swap
+    async function loadAndPlay(path, offsetSeconds, seekTimestamp) {
+      const target = inactivePlayer();
+      target.pause();
+      target.removeAttribute('src');
+      target.src = '/video?path=' + encodeURIComponent(path);
+      
+      target.dataset.seekTimestamp = seekTimestamp ? seekTimestamp.toISOString() : null;
 
-  // Create overview timeline
-  const overviewContainer = document.getElementById('overviewTimeline');
-  const overviewTooltip = document.getElementById('overviewTooltip');
-  const overviewScrubLine = document.getElementById('overviewScrubLine');
-
-  // Overview: only video segments as background
-  const overviewItems = new vis.DataSet();
-  intervals.forEach((interval, i) => {
-    overviewItems.add({
-      id: 'overview_' + i,
-      content: '',
-      start: interval.start,
-      end: interval.end,
-      type: 'background',
-      className: 'overview-item'
-    });
-  });
-
-  const overviewTimeline = new vis.Timeline(overviewContainer, overviewItems, {
-    selectable: false,
-    zoomMin: 1000 * 60 * 60 * 24, // 1 day minimum
-    zoomMax: 1000 * 60 * 60 * 24 * 365, // 1 year maximum
-    stack: false,
-    scrollable: false,
-    showCurrentTime: false,
-    showMajorLabels: false,
-    showMinorLabels: false,
-    locale: 'es',
-    height: '20px'
-  });
-
-  window._sg_overviewTimeline = overviewTimeline;
-
-  // Create detailed timeline
-  const container = document.getElementById('timeline');
-  const tooltip = document.getElementById('timeTooltip');
-  const scrubLine = document.getElementById('scrubLine');
-
-  const timeline = new vis.Timeline(container, items, groups, {
-    selectable: true,
-    zoomMin: 1000 * 60 * 5,
-    zoomMax: 1000 * 60 * 60 * 24,
-    stack: false,
-    showCurrentTime: false,
-    locale: 'es',
-    showMajorLabels: true,
-    showMinorLabels: true,
-    onInitialDrawComplete: function() {
-      // After initial render, set a reasonable window in the middle of available data
-      if (intervals.length > 0) {
-        // Find the middle point of all intervals
-        const firstStart = new Date(intervals[0].start).getTime();
-        const lastEnd = new Date(intervals[intervals.length - 1].end).getTime();
-        const middleTime = new Date((firstStart + lastEnd) / 2);
+      const onMeta = function() {
+        const seek = Math.max(0, Math.min(offsetSeconds || 0, target.duration || 0));
         
-        // Show 24 hours centered on the middle point
-        const windowStart = new Date(middleTime.getTime() - 12 * 60 * 60 * 1000); // 12 hours before
-        const windowEnd = new Date(middleTime.getTime() + 12 * 60 * 60 * 1000); // 12 hours after
-        timeline.setWindow(windowStart, windowEnd, {animation: false});
-      }
+        target.dataset.videoDuration = target.duration;
+        target.dataset.videoOffset = seek;
+        
+        const onSeeked = function() {
+          target.removeEventListener('seeked', onSeeked);
+          
+          const onPlaying = function() {
+            if (active === 'A') {
+              playerB.style.zIndex = 3;
+              playerA.style.zIndex = 1;
+            } else {
+              playerA.style.zIndex = 3;
+              playerB.style.zIndex = 1;
+            }
+            active = (target === playerA) ? 'A' : 'B';
+            const nowInactive = inactivePlayer();
+            try { nowInactive.pause(); } catch (e) {}
+            target.removeEventListener('playing', onPlaying);
+          };
+          target.addEventListener('playing', onPlaying);
+          target.play().catch(() => {});
+        };
+        
+        target.addEventListener('seeked', onSeeked);
+        try { target.currentTime = seek; } catch (e) {}
+        target.removeEventListener('loadedmetadata', onMeta);
+      };
+      target.addEventListener('loadedmetadata', onMeta);
     }
-  });
-
-  // Function to update the detail range indicator
-  function updateDetailRangeIndicator() {
-    const detailRange = timeline.getWindow();
-    const overviewRange = overviewTimeline.getWindow();
-    const indicator = document.getElementById('detailRangeIndicator');
-    const container = document.getElementById('overviewTimeline');
     
-    const containerWidth = container.clientWidth;
-    const overviewSpan = overviewRange.end - overviewRange.start;
+    // Setup timeline click handler for video seeking (only needed once)
+    const container = document.getElementById('timeline');
+    container.onclick = async (event) => {
+      await window.timelineManager.handleTimelineClick(event, loadAndPlay);
+    };
     
-    const startOffset = (detailRange.start - overviewRange.start) / overviewSpan;
-    const endOffset = (detailRange.end - overviewRange.start) / overviewSpan;
+    // Create video player wrapper (only needed once)
+    window.videoPlayer = {
+      getCurrentTime: () => {
+        const player = activePlayer();
+        if (player && player.dataset.seekTimestamp && !player.paused) {
+          const seekTimestamp = new Date(player.dataset.seekTimestamp);
+          const videoOffset = parseFloat(player.dataset.videoOffset || 0);
+          const currentTime = player.currentTime;
+          return new Date(seekTimestamp.getTime() + (currentTime - videoOffset) * 1000);
+        }
+        return null;
+      }
+    };
     
-    indicator.style.left = (startOffset * containerWidth) + 'px';
-    indicator.style.width = ((endOffset - startOffset) * containerWidth) + 'px';
+    // Start updating playback indicator (only needed once)
+    window.timelineManager.startPlaybackIndicator();
+    
+    // Setup video player event handlers (only needed once)
+    setupVideoPlayer(activePlayer, inactivePlayer, () => active, (newActive) => { active = newActive; }, loadAndPlay);
   }
   
-  // Sync overview timeline with detailed timeline and update indicator
-  timeline.on('rangechange', () => {
-    updateDetailRangeIndicator();
-    updateTimeIndicator();
-  });
-  
-  overviewTimeline.on('rangechange', () => {
-    updateDetailRangeIndicator();
-  });
-  
-  // Initial update
-  setTimeout(updateDetailRangeIndicator, 100);
-  
-  // Make the detail range indicator draggable
-  const indicator = document.getElementById('detailRangeIndicator');
-  let isDragging = false;
-  let dragStartX = 0;
-  let dragStartTime = 0;
-  
-  indicator.addEventListener('mousedown', (event) => {
-    isDragging = true;
-    dragStartX = event.clientX;
-    const detailRange = timeline.getWindow();
-    dragStartTime = detailRange.start.getTime();
-    event.stopPropagation();
-    event.preventDefault();
-  });
-  
-  document.addEventListener('mousemove', (event) => {
-    if (!isDragging) return;
-    
-    const overviewRange = overviewTimeline.getWindow();
-    const containerWidth = overviewContainer.clientWidth;
-    const overviewSpan = overviewRange.end - overviewRange.start;
-    
-    const deltaX = event.clientX - dragStartX;
-    const deltaTime = (deltaX / containerWidth) * overviewSpan;
-    
-    const detailRange = timeline.getWindow();
-    const windowSize = detailRange.end - detailRange.start;
-    const newStart = new Date(dragStartTime + deltaTime);
-    const newEnd = new Date(newStart.getTime() + windowSize);
-    
-    timeline.setWindow(newStart, newEnd, {animation: false});
-  });
-  
-  document.addEventListener('mouseup', () => {
-    isDragging = false;
-  });
-  
-  // Click on overview to center the detailed view on that time (keeping window size)
-  overviewContainer.onclick = async (event) => {
-    // Ignore clicks on the detail range indicator
-    if (event.target.id === 'detailRangeIndicator') return;
-    
-    const props = overviewTimeline.getEventProperties(event);
-    if (!props.time) return;
-    
-    // Get current window size and center on clicked time
-    const detailRange = timeline.getWindow();
-    const windowSize = detailRange.end - detailRange.start;
-    const start = new Date(props.time.getTime() - windowSize / 2);
-    const end = new Date(props.time.getTime() + windowSize / 2);
-    timeline.setWindow(start, end, {animation: true});
-  };
-  
+  // Store references for backward compatibility
+  window._sg_timeline = window.timelineManager.getTimeline();
+  window._sg_intervals = window.timelineManager.getIntervals();
+  window._sg_labels = labels;
+}
 
-
-  // store intervals globally
-  window._sg_intervals = intervals;
-  window._sg_timeline = timeline;
-
+function setupVideoPlayer(activePlayerFn, inactivePlayerFn, getActive, setActive, loadAndPlay) {
   const playerA = document.getElementById('playerA');
   const playerB = document.getElementById('playerB');
-  let active = 'A'; // which player is currently visible/active
 
   // Remove old event listeners if they exist
   if (window._sg_playerAEndedHandler) {
@@ -463,166 +717,10 @@ async function initTimeline() {
     playerB.removeEventListener('ended', window._sg_playerBEndedHandler);
   }
 
-  function activePlayer() { return active === 'A' ? playerA : playerB; }
-  function inactivePlayer() { return active === 'A' ? playerB : playerA; }
-
-  // helper to load into the inactive player, seek when metadata is ready, play and then swap
-  async function loadAndPlay(path, offsetSeconds, seekTimestamp) {
-    const target = inactivePlayer();
-    target.pause();
-    target.removeAttribute('src');
-    target.src = '/video?path=' + encodeURIComponent(path);
-    
-    // Store the seek timestamp for calculating next video time
-    target.dataset.seekTimestamp = seekTimestamp ? seekTimestamp.toISOString() : null;
-
-    const onMeta = function() {
-      // clamp offset
-      const seek = Math.max(0, Math.min(offsetSeconds || 0, target.duration || 0));
-      
-      // Store video duration for auto-advance calculation
-      target.dataset.videoDuration = target.duration;
-      target.dataset.videoOffset = seek;
-      
-      // Wait for seek to complete before playing
-      const onSeeked = function() {
-        target.removeEventListener('seeked', onSeeked);
-        
-        const onPlaying = function() {
-          // bring target on top
-          if (active === 'A') {
-            playerB.style.zIndex = 3;
-            playerA.style.zIndex = 1;
-          } else {
-            playerA.style.zIndex = 3;
-            playerB.style.zIndex = 1;
-          }
-          // update active flag
-          active = (target === playerA) ? 'A' : 'B';
-          // pause the now inactive one
-          const nowInactive = inactivePlayer();
-          try { nowInactive.pause(); } catch (e) {}
-          target.removeEventListener('playing', onPlaying);
-        };
-        target.addEventListener('playing', onPlaying);
-        target.play().catch(() => {/* autoplay may be blocked if not user-initiated */});
-      };
-      
-      target.addEventListener('seeked', onSeeked);
-      try { target.currentTime = seek; } catch (e) {}
-      target.removeEventListener('loadedmetadata', onMeta);
-    };
-    target.addEventListener('loadedmetadata', onMeta);
-  }
-
-  // Format time for display
-  function formatTime(date) {
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const seconds = date.getSeconds().toString().padStart(2, '0');
-    return `${hours}:${minutes}:${seconds}`;
-  }
-
-  // Format date and time for display
-  function formatDateTime(date) {
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const seconds = date.getSeconds().toString().padStart(2, '0');
-    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-  }
-
-  // Update time indicator based on current video playback
-  function updateTimeIndicator() {
-    const player = activePlayer();
-    const timeIndicator = document.getElementById('timeIndicator');
-    const playbackIndicator = document.getElementById('playbackIndicator');
-    const timeline = window._sg_timeline;
-    
-    if (player && player.dataset.seekTimestamp && !player.paused && timeline) {
-      const seekTimestamp = new Date(player.dataset.seekTimestamp);
-      const videoOffset = parseFloat(player.dataset.videoOffset || 0);
-      const currentTime = player.currentTime;
-      
-      // Calculate actual playback time
-      const actualTime = new Date(seekTimestamp.getTime() + (currentTime - videoOffset) * 1000);
-      timeIndicator.textContent = formatDateTime(actualTime);
-      
-      // Update playback indicator position on timeline
-      const timelineRange = timeline.getWindow();
-      const container = document.getElementById('timeline');
-      
-      // Get the content area (vis-center) which contains the actual timeline items
-      const centerPanel = container.querySelector('.vis-center');
-      if (!centerPanel) return;
-      
-      const containerWidth = centerPanel.clientWidth;
-      const timeSpan = timelineRange.end - timelineRange.start;
-      
-      // Check if current time is within visible range
-      if (actualTime >= timelineRange.start && actualTime <= timelineRange.end) {
-        const offset = (actualTime - timelineRange.start) / timeSpan;
-        
-        // Position relative to the center panel's left edge
-        const centerLeft = centerPanel.getBoundingClientRect().left - container.getBoundingClientRect().left;
-        playbackIndicator.style.left = (centerLeft + offset * containerWidth) + 'px';
-        playbackIndicator.style.display = 'block';
-      } else {
-        playbackIndicator.style.display = 'none';
-      }
-    } else {
-      playbackIndicator.style.display = 'none';
-    }
-  }
-
-  // Start updating time indicator
-  setInterval(updateTimeIndicator, 100);
-
-  // Handle mouse move over timeline for scrubbing preview
-  container.addEventListener('mousemove', (event) => {
-    const props = timeline.getEventProperties(event);
-    if (props.time) {
-      const timeDate = new Date(props.time);
-      const rect = container.getBoundingClientRect();
-      const mouseX = event.clientX - rect.left;
-      
-      // Show tooltip with time
-      tooltip.textContent = formatTime(timeDate);
-      tooltip.style.display = 'block';
-      tooltip.style.left = `${event.clientX - rect.left + 10}px`;
-      tooltip.style.top = `${event.clientY - rect.top - 30}px`;
-      
-      // Show scrub line
-      scrubLine.style.display = 'block';
-      scrubLine.style.left = `${mouseX}px`;
-    }
-  });
-
-  // Hide tooltip and scrub line when mouse leaves
-  container.addEventListener('mouseleave', () => {
-    tooltip.style.display = 'none';
-    scrubLine.style.display = 'none';
-  });
-
-  // Click on timeline to seek
-  container.onclick = async (event) => {
-    const props = timeline.getEventProperties(event);
-    if (!props.time) return;
-    const t = props.time.toISOString();
-    const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id));
-    if (!resp.ok) return;
-    const { path, offset } = await resp.json();
-    
-    await loadAndPlay(path, offset || 0, props.time);
-  };
-
   // When video ends, find the next available video and play it
   const playerAEndedHandler = async () => {
-    if (active !== 'A') return; // only respond if A is active
+    if (getActive() !== 'A') return; // only respond if A is active
     
-    // Calculate what time this video ended at
     const seekTimestamp = playerA.dataset.seekTimestamp;
     const videoOffset = parseFloat(playerA.dataset.videoOffset || 0);
     const videoDuration = parseFloat(playerA.dataset.videoDuration || 0);
@@ -633,7 +731,6 @@ async function initTimeline() {
     const playedDuration = videoDuration - videoOffset;
     const endTime = new Date(startTime.getTime() + playedDuration * 1000);
     
-    // Seek to the beginning of the next video using return_next=true
     const t = startTime.toISOString();
     const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id) + '&return_next=true');
     if (!resp.ok) return;
@@ -643,9 +740,8 @@ async function initTimeline() {
   };
 
   const playerBEndedHandler = async () => {
-    if (active !== 'B') return; // only respond if B is active
+    if (getActive() !== 'B') return; // only respond if B is active
     
-    // Calculate what time this video ended at
     const seekTimestamp = playerB.dataset.seekTimestamp;
     const videoOffset = parseFloat(playerB.dataset.videoOffset || 0);
     const videoDuration = parseFloat(playerB.dataset.videoDuration || 0);
