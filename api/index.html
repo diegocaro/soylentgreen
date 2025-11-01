@@ -325,7 +325,21 @@ async function initTimeline() {
     showCurrentTime: false,
     locale: 'es',
     showMajorLabels: true,
-    showMinorLabels: true
+    showMinorLabels: true,
+    onInitialDrawComplete: function() {
+      // After initial render, set a reasonable window in the middle of available data
+      if (intervals.length > 0) {
+        // Find the middle point of all intervals
+        const firstStart = new Date(intervals[0].start).getTime();
+        const lastEnd = new Date(intervals[intervals.length - 1].end).getTime();
+        const middleTime = new Date((firstStart + lastEnd) / 2);
+        
+        // Show 24 hours centered on the middle point
+        const windowStart = new Date(middleTime.getTime() - 12 * 60 * 60 * 1000); // 12 hours before
+        const windowEnd = new Date(middleTime.getTime() + 12 * 60 * 60 * 1000); // 12 hours after
+        timeline.setWindow(windowStart, windowEnd, {animation: false});
+      }
+    }
   });
 
   // Function to update the detail range indicator
