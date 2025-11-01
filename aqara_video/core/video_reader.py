@@ -69,9 +69,9 @@ class VideoStream(Stream):
     tags: dict[str, str]
 
     def __post_init__(self) -> None:
-        assert self.codec_type == "video", (
-            f"Expected codec_type 'video', got {self.codec_type}"
-        )
+        assert (
+            self.codec_type == "video"
+        ), f"Expected codec_type 'video', got {self.codec_type}"
 
 
 @dataclass
@@ -102,11 +102,16 @@ class VideoMetadata:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "VideoMetadata":
         """Create a VideoMetadata instance from a dictionary."""
-        streams = [
-            VideoStream(**stream)
-            for stream in data.get("streams", [])
-            if stream.get("codec_type") == "video"
-        ]
+        streams = []
+        for stream in data.get("streams", []):
+            if stream.get("codec_type") == "video":
+                # Only keep fields that are in VideoStream dataclass
+                allowed = {
+                    k: v
+                    for k, v in stream.items()
+                    if k in VideoStream.__dataclass_fields__
+                }
+                streams.append(VideoStream(**allowed))
         format_data = Format(**data.get("format", {}))
         return cls(streams=streams, format=format_data)
 
