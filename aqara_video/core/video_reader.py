@@ -112,7 +112,11 @@ class VideoMetadata:
                     if k in VideoStream.__dataclass_fields__
                 }
                 streams.append(VideoStream(**allowed))
-        format_data = Format(**data.get("format", {}))
+        format_dict = data.get("format", {})
+        allowed_format = {
+            k: v for k, v in format_dict.items() if k in Format.__dataclass_fields__
+        }
+        format_data = Format(**allowed_format)
         return cls(streams=streams, format=format_data)
 
     def get_best_stream(self) -> VideoStream:
