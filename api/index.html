@@ -567,9 +567,22 @@ async function loadCameras() {
   select.value = camera_id;
   
   // Handle camera change
-  select.addEventListener('change', (e) => {
+  select.addEventListener('change', async (e) => {
+    // Capture current playback time before changing camera
+    const currentTime = window.videoPlayer ? window.videoPlayer.getCurrentTime() : null;
+    
     camera_id = e.target.value;
-    initTimeline();
+    await initTimeline();
+    
+    // If we had a playback time, seek to that time in the new camera
+    if (currentTime && window.loadAndPlay) {
+      const t = currentTime.toISOString();
+      const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id));
+      if (resp.ok) {
+        const { path, offset } = await resp.json();
+        await window.loadAndPlay(path, offset || 0, currentTime);
+      }
+    }
   });
   
   return camera_id;
@@ -671,6 +684,9 @@ async function initTimeline() {
       };
       target.addEventListener('loadedmetadata', onMeta);
     }
+    
+    // Make loadAndPlay available globally for camera switching
+    window.loadAndPlay = loadAndPlay;
     
     // Setup timeline click handler for video seeking (only needed once)
     const container = document.getElementById('timeline');
