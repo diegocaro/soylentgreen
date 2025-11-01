@@ -64,16 +64,6 @@
           background: linear-gradient(180deg, rgba(76, 175, 80, 0.3), rgba(76, 175, 80, 0.6));
           pointer-events: none;
         }
-        .label-marker {
-          position: absolute;
-          top: 0;
-          height: 100%;
-          background: rgba(255, 152, 0, 0.3);
-          border-left: 1px solid rgba(255, 152, 0, 0.7);
-          border-right: 1px solid rgba(255, 152, 0, 0.7);
-          pointer-events: none;
-          z-index: 5;
-        }
         .label-legend {
           margin-top: 10px;
           margin-bottom: 15px;
@@ -193,46 +183,7 @@ async function loadCameras() {
   return camera_id;
 }
 
-function renderLabelMarkers(container, labels, timelineObj) {
-  // Remove existing label markers
-  const existingMarkers = container.querySelectorAll('.label-marker');
-  existingMarkers.forEach(marker => marker.remove());
-  
-  if (!labels || !labels.labels) return;
-  
-  const timelineRange = timelineObj.getWindow();
-  const containerWidth = container.clientWidth;
-  const timeSpan = timelineRange.end - timelineRange.start;
-  
-  // Render markers for each label type
-  Object.entries(labels.labels).forEach(([labelName, labelTimeline]) => {
-    const color = getLabelColor(labelName);
-    const borderColor = getLabelBorderColor(labelName);
-    
-    labelTimeline.intervals.forEach(interval => {
-      const start = new Date(interval.start);
-      const end = new Date(interval.end);
-      
-      // Only render if interval intersects with visible range
-      if (end >= timelineRange.start && start <= timelineRange.end) {
-        const marker = document.createElement('div');
-        marker.className = 'label-marker';
-        marker.style.background = color;
-        marker.style.borderLeft = `1px solid ${borderColor}`;
-        marker.style.borderRight = `1px solid ${borderColor}`;
-        marker.title = `${labelName}: ${start.toLocaleString()} - ${end.toLocaleString()}`;
-        
-        const startOffset = Math.max(0, (start - timelineRange.start) / timeSpan);
-        const endOffset = Math.min(1, (end - timelineRange.start) / timeSpan);
-        
-        marker.style.left = (startOffset * containerWidth) + 'px';
-        marker.style.width = ((endOffset - startOffset) * containerWidth) + 'px';
-        
-        container.appendChild(marker);
-      }
-    });
-  });
-}
+
 
 function updateLabelLegend(labels) {
   const legendContainer = document.getElementById('labelLegend');
@@ -274,32 +225,61 @@ async function initTimeline() {
   
   const res = await fetch('/list-intervals?camera_id=' + encodeURIComponent(camera_id));
   const intervals = await res.json();
-  
+
   // Fetch labels for this camera
   const labelsRes = await fetch('/labels?camera_id=' + encodeURIComponent(camera_id));
   const labels = await labelsRes.json();
   window._sg_labels = labels;
-  const items = intervals.map((interval, i) => ({
-    id: i,
-    content: '',
-    start: interval.start,
-    end: interval.end
-  }));
+
+  // Build items using vis.DataSet: video segments as background, labels as default
+  const items = new vis.DataSet();
+  
+  // Add video segments as background type
+  intervals.forEach((interval, i) => {
+    items.add({
+      id: 'segment_' + i,
+      content: '',
+      start: interval.start,
+      end: interval.end,
+      type: 'background',
+      className: 'video-segment'
+    });
+  });
+  
+  // Add labels as default type (range/box)
+  if (labels && labels.labels) {
+    Object.entries(labels.labels).forEach(([labelName, labelTimeline]) => {
+      labelTimeline.intervals.forEach((interval, j) => {
+        items.add({
+          id: `label_${labelName}_${j}`,
+          content: labelName,
+          start: interval.start,
+          end: interval.end,
+          type: 'range',
+          className: 'label-item label-' + labelName
+        });
+      });
+    });
+  }
 
   // Create overview timeline
   const overviewContainer = document.getElementById('overviewTimeline');
   const overviewTooltip = document.getElementById('overviewTooltip');
   const overviewScrubLine = document.getElementById('overviewScrubLine');
-  
-  // Create simplified items for overview (group by day for better performance)
-  const overviewItems = items.map((item, i) => ({
-    id: 'overview_' + i,
-    content: '',
-    start: item.start,
-    end: item.end,
-    className: 'overview-item'
-  }));
-  
+
+  // Overview: only video segments as background
+  const overviewItems = new vis.DataSet();
+  intervals.forEach((interval, i) => {
+    overviewItems.add({
+      id: 'overview_' + i,
+      content: '',
+      start: interval.start,
+      end: interval.end,
+      type: 'background',
+      className: 'overview-item'
+    });
+  });
+
   const overviewTimeline = new vis.Timeline(overviewContainer, overviewItems, {
     selectable: false,
     zoomMin: 1000 * 60 * 60 * 24, // 1 day minimum
@@ -310,19 +290,14 @@ async function initTimeline() {
     showMinorLabels: true,
     locale: 'es'
   });
-  
+
   window._sg_overviewTimeline = overviewTimeline;
-  
-  // Render labels on overview timeline after it's ready
-  setTimeout(() => {
-    renderLabelMarkers(overviewContainer, labels, overviewTimeline);
-  }, 100);
 
   // Create detailed timeline
   const container = document.getElementById('timeline');
   const tooltip = document.getElementById('timeTooltip');
   const scrubLine = document.getElementById('scrubLine');
-  
+
   const timeline = new vis.Timeline(container, items, {
     selectable: true,
     zoomMin: 1000 * 60 * 5,
@@ -333,14 +308,6 @@ async function initTimeline() {
     showMajorLabels: false,
     showMinorLabels: true
   });
-  
-  // Render labels on detailed timeline after it's ready
-  setTimeout(() => {
-    renderLabelMarkers(container, labels, timeline);
-  }, 100);
-  
-  // Update label legend
-  updateLabelLegend(labels);
 
   // Function to update the detail range indicator
   function updateDetailRangeIndicator() {
@@ -362,13 +329,11 @@ async function initTimeline() {
   // Sync overview timeline with detailed timeline and update indicator
   timeline.on('rangechange', () => {
     updateDetailRangeIndicator();
-    renderLabelMarkers(container, labels, timeline);
     updateTimeIndicator();
   });
   
   overviewTimeline.on('rangechange', () => {
     updateDetailRangeIndicator();
-    renderLabelMarkers(overviewContainer, labels, overviewTimeline);
   });
   
   // Initial update
