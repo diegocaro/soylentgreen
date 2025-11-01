@@ -74,7 +74,7 @@ def post_process(
     frame: ImageCV,
     features: dict[str, float],
     green_threshold: float = 0.2,
-) -> ImageCV:
+) -> ImageCV | None:
     if frame is None:
         return None
 
@@ -134,7 +134,7 @@ class Timelapse:
         # Setup the video writer
         writer = VideoWriter(output, clip.width, clip.height)
 
-        def process(clip: Clip) -> ImageCV:
+        def process(clip: Clip) -> ImageCV | None:
             frame = clip.read_frame()
             features = dynamic_range(frame)
             return post_process(
@@ -185,51 +185,51 @@ class VideoPlayer:
         if cv2.waitKey(1) & 0xFF == ord("q"):
             exit()
 
-    def show_threaded(self, clips: list[Clip], num_workers: int = 4) -> None:
-        frame_queue = Queue(maxsize=1000)
+    # def show_threaded(self, clips: list[Clip], num_workers: int = 4) -> None:
+    #     frame_queue = Queue(maxsize=1000)
 
-        def read_frame(clip: Clip):
-            frame = clip.read_frame()
-            frame_queue.put((clip, frame))
+    #     def read_frame(clip: Clip):
+    #         frame = clip.read_frame()
+    #         frame_queue.put((clip, frame))
 
-        with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            futures = [executor.submit(read_frame, clip) for clip in clips]
+    #     with ThreadPoolExecutor(max_workers=num_workers) as executor:
+    #         futures = [executor.submit(read_frame, clip) for clip in clips]
 
-            frames_processed = 0
-            total_frames = len(filtered_clips)
+    #         frames_processed = 0
+    #         total_frames = len(filtered_clips)
 
-            while frames_processed < total_frames:
-                clip, frame = frame_queue.get()
-                if frame is not None:
-                    self.draw(frame)
-                frames_processed += 1
-                if frames_processed % 10 == 0:
-                    print(clip)
-                    print(f"Progress: {frames_processed}/{total_frames}")
+    #         while frames_processed < total_frames:
+    #             clip, frame = frame_queue.get()
+    #             if frame is not None:
+    #                 self.draw(frame)
+    #             frames_processed += 1
+    #             if frames_processed % 10 == 0:
+    #                 print(clip)
+    #                 print(f"Progress: {frames_processed}/{total_frames}")
 
-    def show_threaded_old(self, clips: list[Clip]) -> None:
-        def read_frames(clips: list[Clip], frame_queue: Queue):
-            for clip in clips:
-                frame = clip.read_frame()
-                frame_queue.put(frame)
+    # def show_threaded_old(self, clips: list[Clip]) -> None:
+    #     def read_frames(clips: list[Clip], frame_queue: Queue):
+    #         for clip in clips:
+    #             frame = clip.read_frame()
+    #             frame_queue.put(frame)
 
-        frame_queue = Queue()
-        workers = threading.Thread(
-            target=read_frames,
-            args=(clips, frame_queue),
-            daemon=True,
-        )
-        workers.start()
+    #     frame_queue = Queue()
+    #     workers = threading.Thread(
+    #         target=read_frames,
+    #         args=(clips, frame_queue),
+    #         daemon=True,
+    #     )
+    #     workers.start()
 
-        def draw_frames(frame_queue: Queue):
-            while True:
-                frame = frame_queue.get()
-                self.draw(frame)
+    #     def draw_frames(frame_queue: Queue):
+    #         while True:
+    #             frame = frame_queue.get()
+    #             self.draw(frame)
 
-        draw_frames(frame_queue)
+    #     draw_frames(frame_queue)
 
     def show_joblib(self, clips: list[Clip], green_threshold: float = 0.2) -> None:
-        def process(clip: Clip) -> ImageCV:
+        def process(clip: Clip) -> ImageCV | None:
             frame = clip.read_frame()
             features = dynamic_range(frame)
             return post_process(
@@ -240,7 +240,7 @@ class VideoPlayer:
             delayed(process)(clip) for clip in clips
         )
         for frame in res:
-            self.draw(frame)
+            self.draw(frame)  # pyright: ignore[reportArgumentType]
 
 
 def parse_datetime(date_str: str) -> datetime | None:

@@ -62,7 +62,7 @@ class Detector:
         """
         # Use the optimized preprocessing approach
         rgb_frame = bgr_to_rgb(image)
-        image_tensor = self._transform(rgb_frame).to(self.device)
+        image_tensor = self._transform(rgb_frame).to(self.device)  # type: ignore
         return image_tensor
 
     def preprocess_batch(self, frames: list[ImageCV]) -> list[torch.Tensor]:
@@ -80,7 +80,7 @@ class Detector:
             # Convert BGR to RGB using our centralized function
             rgb_frame = bgr_to_rgb(frame)
             # Convert to tensor
-            tensor = self._transform(rgb_frame).to(self.device)
+            tensor = self._transform(rgb_frame).to(self.device)  # type: ignore
             tensors.append(tensor)
         return tensors
 
@@ -162,7 +162,7 @@ class Detector:
             # Clear buffers
             self.frame_buffer = []
             self.frame_ids_buffer = []
-            return results
+            return results  # type: ignore
         return []
 
     def flush_batch(self) -> list[Prediction]:
@@ -179,4 +179,4 @@ class Detector:
         # Clear buffers
         self.frame_buffer = []
         self.frame_ids_buffer = []
-        return results
+        return results  # type: ignore

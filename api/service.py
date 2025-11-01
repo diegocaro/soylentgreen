@@ -51,7 +51,6 @@ class Service:
     def _search(
         self, segments: list[VideoSegment], target: datetime, return_next: bool = False
     ) -> VideoSegment | None:
-
         # assert segments are sorted by start time
         assert all(
             segments[i].start <= segments[i + 1].start for i in range(len(segments) - 1)
