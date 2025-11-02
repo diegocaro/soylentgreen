@@ -360,7 +360,8 @@ class TimelineManager {
         const rect = container.getBoundingClientRect();
         const mouseX = event.clientX - rect.left;
         
-        tooltip.textContent = this.formatTime(timeDate);
+        // Show both date and time
+        tooltip.textContent = this.formatDateTime(timeDate);
         tooltip.style.display = 'block';
         tooltip.style.left = `${event.clientX - rect.left + 10}px`;
         tooltip.style.top = `${event.clientY - rect.top - 30}px`;
