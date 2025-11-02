@@ -677,116 +677,18 @@ async function initTimeline(keepWindow = false) {
     const playerA = document.getElementById('playerA');
     const playerB = document.getElementById('playerB');
     let active = 'A';
-    let preloadInProgress = false;
     
     function activePlayer() { return active === 'A' ? playerA : playerB; }
     function inactivePlayer() { return active === 'A' ? playerB : playerA; }
     
-    // Helper to preload next segment in background without playing
-    async function preloadNextSegment() {
-      if (preloadInProgress) return;
-      preloadInProgress = true;
-      
-      try {
-        const current = activePlayer();
-        const seekTimestamp = current.dataset.seekTimestamp;
-        
-        if (!seekTimestamp) {
-          preloadInProgress = false;
-          return;
-        }
-        
-        const startTime = new Date(seekTimestamp);
-        const t = startTime.toISOString();
-        const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id) + '&return_next=true');
-        
-        if (!resp.ok) {
-          preloadInProgress = false;
-          return;
-        }
-        
-        const { path, offset } = await resp.json();
-        const videoOffset = parseFloat(current.dataset.videoOffset || 0);
-        const videoDuration = parseFloat(current.dataset.videoDuration || 0);
-        const playedDuration = videoDuration - videoOffset;
-        const endTime = new Date(startTime.getTime() + playedDuration * 1000);
-        
-        // Preload into inactive player
-        const target = inactivePlayer();
-        target.pause();
-        target.removeAttribute('src');
-        target.src = '/video?path=' + encodeURIComponent(path);
-        target.preload = 'auto';
-        
-        target.dataset.seekTimestamp = endTime.toISOString();
-        target.dataset.preloaded = 'true';
-        
-        // Wait for metadata and seek
-        await new Promise((resolve) => {
-          const onMeta = function() {
-            target.removeEventListener('loadedmetadata', onMeta);
-            const seek = Math.max(0, Math.min(offset || 0, target.duration || 0));
-            target.dataset.videoDuration = target.duration;
-            target.dataset.videoOffset = seek;
-            
-            const onSeeked = function() {
-              target.removeEventListener('seeked', onSeeked);
-              resolve();
-            };
-            target.addEventListener('seeked', onSeeked);
-            try { target.currentTime = seek; } catch (e) { resolve(); }
-          };
-          target.addEventListener('loadedmetadata', onMeta);
-        });
-        
-        preloadInProgress = false;
-      } catch (error) {
-        console.error('Preload failed:', error);
-        preloadInProgress = false;
-      }
-    }
-    
     // Helper to load into the inactive player, seek when metadata is ready, play and then swap
     async function loadAndPlay(path, offsetSeconds, seekTimestamp) {
       const target = inactivePlayer();
-      
-      // Check if this segment is already preloaded
-      if (target.dataset.preloaded === 'true' && target.src.includes(encodeURIComponent(path))) {
-        // Segment is already loaded and ready - just play it
-        target.dataset.preloaded = 'false';
-        
-        const onPlaying = function() {
-          target.removeEventListener('playing', onPlaying);
-          
-          if (active === 'A') {
-            playerB.style.zIndex = 3;
-            playerA.style.zIndex = 1;
-          } else {
-            playerA.style.zIndex = 3;
-            playerB.style.zIndex = 1;
-          }
-          active = (target === playerA) ? 'A' : 'B';
-          
-          const nowInactive = inactivePlayer();
-          try { nowInactive.pause(); } catch (e) {}
-          
-          // Preload next segment after switching
-          setTimeout(() => preloadNextSegment(), 1000);
-        };
-        
-        target.addEventListener('playing', onPlaying);
-        target.play().catch(() => {});
-        return;
-      }
-      
-      // Not preloaded, load normally
       target.pause();
       target.removeAttribute('src');
       target.src = '/video?path=' + encodeURIComponent(path);
-      target.preload = 'auto';
       
       target.dataset.seekTimestamp = seekTimestamp ? seekTimestamp.toISOString() : null;
-      target.dataset.preloaded = 'false';
 
       const onMeta = function() {
         const seek = Math.max(0, Math.min(offsetSeconds || 0, target.duration || 0));
@@ -809,9 +711,6 @@ async function initTimeline(keepWindow = false) {
             const nowInactive = inactivePlayer();
             try { nowInactive.pause(); } catch (e) {}
             target.removeEventListener('playing', onPlaying);
-            
-            // Preload next segment after switching
-            setTimeout(() => preloadNextSegment(), 1000);
           };
           target.addEventListener('playing', onPlaying);
           target.play().catch(() => {});
@@ -872,9 +771,9 @@ function setupVideoPlayer(activePlayerFn, inactivePlayerFn, getActive, setActive
     playerB.removeEventListener('ended', window._sg_playerBEndedHandler);
   }
 
-  // When video ends, switch to preloaded segment (should be instant)
+  // When video ends, find the next available video and play it
   const playerAEndedHandler = async () => {
-    if (getActive() !== 'A') return;
+    if (getActive() !== 'A') return; // only respond if A is active
     
     const seekTimestamp = playerA.dataset.seekTimestamp;
     const videoOffset = parseFloat(playerA.dataset.videoOffset || 0);
@@ -886,23 +785,16 @@ function setupVideoPlayer(activePlayerFn, inactivePlayerFn, getActive, setActive
     const playedDuration = videoDuration - videoOffset;
     const endTime = new Date(startTime.getTime() + playedDuration * 1000);
     
-    // Check if next segment is preloaded
-    const inactive = inactivePlayerFn();
-    if (inactive.dataset.preloaded === 'true') {
-      // Instant switch to preloaded segment
-      await loadAndPlay(inactive.src.split('path=')[1] ? decodeURIComponent(inactive.src.split('path=')[1]) : '', 0, endTime);
-    } else {
-      // Fallback: fetch and load next segment
-      const t = startTime.toISOString();
-      const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id) + '&return_next=true');
-      if (!resp.ok) return;
-      const { path, offset } = await resp.json();
-      await loadAndPlay(path, offset || 0, endTime);
-    }
+    const t = startTime.toISOString();
+    const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id) + '&return_next=true');
+    if (!resp.ok) return;
+    const { path, offset } = await resp.json();
+    
+    await loadAndPlay(path, offset || 0, endTime);
   };
 
   const playerBEndedHandler = async () => {
-    if (getActive() !== 'B') return;
+    if (getActive() !== 'B') return; // only respond if B is active
     
     const seekTimestamp = playerB.dataset.seekTimestamp;
     const videoOffset = parseFloat(playerB.dataset.videoOffset || 0);
@@ -914,19 +806,13 @@ function setupVideoPlayer(activePlayerFn, inactivePlayerFn, getActive, setActive
     const playedDuration = videoDuration - videoOffset;
     const endTime = new Date(startTime.getTime() + playedDuration * 1000);
     
-    // Check if next segment is preloaded
-    const inactive = inactivePlayerFn();
-    if (inactive.dataset.preloaded === 'true') {
-      // Instant switch to preloaded segment
-      await loadAndPlay(inactive.src.split('path=')[1] ? decodeURIComponent(inactive.src.split('path=')[1]) : '', 0, endTime);
-    } else {
-      // Fallback: fetch and load next segment
-      const t = startTime.toISOString();
-      const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id) + '&return_next=true');
-      if (!resp.ok) return;
-      const { path, offset } = await resp.json();
-      await loadAndPlay(path, offset || 0, endTime);
-    }
+    // Seek to the beginning of the next video using return_next=true
+    const t = startTime.toISOString();
+    const resp = await fetch('/seek?time=' + encodeURIComponent(t) + '&camera_id=' + encodeURIComponent(camera_id) + '&return_next=true');
+    if (!resp.ok) return;
+    const { path, offset } = await resp.json();
+    
+    await loadAndPlay(path, offset || 0, endTime);
   };
 
   // Store handlers globally so we can remove them later
