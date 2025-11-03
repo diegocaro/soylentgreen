@@ -48,16 +48,20 @@ For example, if your NAS is mounted at `/mnt/cameras/`, a complete video path mi
 
 ## Installation
 
-This project uses Poetry for dependency management. To install:
+This project uses [uv](https://github.com/astral-sh/uv) for dependency management and [pre-commit](https://pre-commit.com/) for code quality checks.
 
 ```bash
 # Clone the repository
 git clone https://github.com/diegocaro/soylentgreen.git
 cd soylentgreen
 
-# Install with Poetry
-poetry install
+# Install dependencies with uv (using pyproject.toml)
+uv sync
+
+# (Optional) Set up pre-commit hooks for linting and type checking
+pre-commit install
 ```
+
 
 ## Dependencies
 
@@ -67,6 +71,19 @@ poetry install
 - NumPy
 - Joblib
 - Pytest
+- [uv](https://github.com/astral-sh/uv) (dependency management, uses `pyproject.toml`)
+- [pre-commit](https://pre-commit.com/) (git hooks)
+- [pyright](https://github.com/microsoft/pyright) (type checking)
+- [ruff](https://github.com/astral-sh/ruff) (linting)
+
+
+## Development Workflow
+
+Before committing code, pre-commit will automatically run [pyright](https://github.com/microsoft/pyright) for type checking and [ruff](https://github.com/astral-sh/ruff) for linting. You can run these checks manually:
+
+```bash
+pre-commit run --all-files
+```
 
 ## Usage
 
