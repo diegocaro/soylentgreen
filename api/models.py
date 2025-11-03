@@ -1,4 +1,5 @@
 from datetime import datetime
+from collections.abc import Sequence
 
 from pydantic import BaseModel
 
@@ -11,6 +12,30 @@ class CameraInfo(BaseModel):
 class TimeInterval(BaseModel):
     start: datetime
     end: datetime
+
+    @classmethod
+    def merge_intervals(
+        cls, intervals: Sequence["TimeInterval"], max_gap_seconds: int = 30
+    ) -> list["TimeInterval"]:
+        if not intervals:
+            return []
+
+        sorted_intervals = sorted(intervals, key=lambda x: x.start)
+        merged_intervals = []
+        current_start = sorted_intervals[0].start
+        current_end = sorted_intervals[0].end
+
+        for interval in sorted_intervals[1:]:
+            gap = (interval.start - current_end).total_seconds()
+            if gap <= max_gap_seconds:
+                current_end = max(current_end, interval.end)
+            else:
+                merged_intervals.append(cls(start=current_start, end=current_end))
+                current_start = interval.start
+                current_end = interval.end
+
+        merged_intervals.append(cls(start=current_start, end=current_end))
+        return merged_intervals
 
 
 class VideoSegment(TimeInterval):

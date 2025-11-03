@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 
 from api.config import DEFAULT_CAMERA_ID
 from api.models import (
@@ -127,32 +127,6 @@ class Service:
 
         return None
 
-    def _merge_intervals(
-        self, intervals: Sequence[TimeInterval], max_gap_seconds: int = 30
-    ) -> list[TimeInterval]:
-        if not intervals:
-            return []
-
-        # Sort intervals by start time
-        sorted_intervals = sorted(intervals, key=lambda x: x.start)
-        merged_intervals = []
-        current_start = sorted_intervals[0].start
-        current_end = sorted_intervals[0].end
-
-        for interval in sorted_intervals[1:]:
-            gap = (interval.start - current_end).total_seconds()
-            if gap <= max_gap_seconds:
-                current_end = max(current_end, interval.end)
-            else:
-                merged_intervals.append(
-                    TimeInterval(start=current_start, end=current_end)
-                )
-                current_start = interval.start
-                current_end = interval.end
-
-        merged_intervals.append(TimeInterval(start=current_start, end=current_end))
-        return merged_intervals
-
     def get_labels_timeline(
         self, camera_id: str, max_gap_seconds: int = 30
     ) -> CameraLabels:
@@ -161,7 +135,9 @@ class Service:
             return CameraLabels(labels={})
         merged_labels = {
             label: LabelTimeline(
-                intervals=self._merge_intervals(timeline.intervals, max_gap_seconds)
+                intervals=TimeInterval.merge_intervals(
+                    timeline.intervals, max_gap_seconds
+                )
             )
             for label, timeline in raw_labels.labels.items()
         }
@@ -175,4 +151,4 @@ class Service:
         Segments at most max_gap_seconds apart are merged into one interval.
         """
         camera = self._scan_result.cameras[camera_id]
-        return self._merge_intervals(camera.segments, max_gap_seconds)
+        return TimeInterval.merge_intervals(camera.segments, max_gap_seconds)
