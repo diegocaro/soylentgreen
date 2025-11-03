@@ -4,7 +4,13 @@ from datetime import datetime
 from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 
-from api.config import CAMERA_MAP, LABELS_TIMELINE_FILE, SCAN_RESULT_FILE, VIDEO_DIR
+from api.config import (
+    CAMERA_MAP,
+    LABELS_TIMELINE_FILE,
+    ROOTDIR,
+    SCAN_RESULT_FILE,
+    VIDEO_DIR,
+)
 from api.models import (
     CameraInfo,
     CameraLabels,
@@ -39,7 +45,7 @@ def get_service() -> Service:
 
 @app.get("/")
 def index():
-    return FileResponse("index.html")
+    return FileResponse(ROOTDIR / "api" / "index.html")
 
 
 @app.get("/cameras")

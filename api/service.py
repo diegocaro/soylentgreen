@@ -1,11 +1,14 @@
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Sequence
 
+from api.config import DEFAULT_CAMERA_ID
 from api.models import (
     CameraInfo,
     CameraLabels,
     LabelsByCamera,
+    LabelTimeline,
     ScanResult,
     SeekResult,
     TimeInterval,
@@ -33,9 +36,11 @@ class Service:
             name = self._camera_map.get(camera_id, camera_id)
             return CameraInfo(id=camera_id, name=name)
 
-        cameras = [
-            map_camera(camera_id) for camera_id in self._scan_result.cameras.keys()
-        ]
+        camera_ids = list(self._scan_result.cameras.keys())
+        if DEFAULT_CAMERA_ID and DEFAULT_CAMERA_ID in camera_ids:
+            camera_ids.remove(DEFAULT_CAMERA_ID)
+            camera_ids = [DEFAULT_CAMERA_ID] + camera_ids
+        cameras = [map_camera(camera_id) for camera_id in camera_ids]
         return cameras
 
     def list_videos(self, camera_id: str) -> list[VideoSegment]:
@@ -122,8 +127,45 @@ class Service:
 
         return None
 
-    def get_labels_timeline(self, camera_id: str) -> CameraLabels:
-        return self._labels_timeline.cameras.get(camera_id, CameraLabels(labels={}))
+    def _merge_intervals(
+        self, intervals: Sequence[TimeInterval], max_gap_seconds: int = 30
+    ) -> list[TimeInterval]:
+        if not intervals:
+            return []
+
+        # Sort intervals by start time
+        sorted_intervals = sorted(intervals, key=lambda x: x.start)
+        merged_intervals = []
+        current_start = sorted_intervals[0].start
+        current_end = sorted_intervals[0].end
+
+        for interval in sorted_intervals[1:]:
+            gap = (interval.start - current_end).total_seconds()
+            if gap <= max_gap_seconds:
+                current_end = max(current_end, interval.end)
+            else:
+                merged_intervals.append(
+                    TimeInterval(start=current_start, end=current_end)
+                )
+                current_start = interval.start
+                current_end = interval.end
+
+        merged_intervals.append(TimeInterval(start=current_start, end=current_end))
+        return merged_intervals
+
+    def get_labels_timeline(
+        self, camera_id: str, max_gap_seconds: int = 30
+    ) -> CameraLabels:
+        raw_labels = self._labels_timeline.cameras.get(camera_id)
+        if not raw_labels:
+            return CameraLabels(labels={})
+        merged_labels = {
+            label: LabelTimeline(
+                intervals=self._merge_intervals(timeline.intervals, max_gap_seconds)
+            )
+            for label, timeline in raw_labels.labels.items()
+        }
+        return CameraLabels(labels=merged_labels)
 
     def list_intervals(
         self, camera_id: str, max_gap_seconds: int = 30
@@ -133,25 +175,4 @@ class Service:
         Segments at most max_gap_seconds apart are merged into one interval.
         """
         camera = self._scan_result.cameras[camera_id]
-        segments = sorted(camera.segments, key=lambda s: s.start)
-
-        if not segments:
-            return []
-
-        merged_intervals = []
-        current_start = segments[0].start
-        current_end = segments[0].end
-
-        for segment in segments[1:]:
-            gap = (segment.start - current_end).total_seconds()
-            if gap <= max_gap_seconds:
-                current_end = max(current_end, segment.end)
-            else:
-                merged_intervals.append(
-                    TimeInterval(start=current_start, end=current_end)
-                )
-                current_start = segment.start
-                current_end = segment.end
-
-        merged_intervals.append(TimeInterval(start=current_start, end=current_end))
-        return merged_intervals
+        return self._merge_intervals(camera.segments, max_gap_seconds)
