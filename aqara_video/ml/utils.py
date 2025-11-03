@@ -59,7 +59,7 @@ def draw_box_with_label(
     label_text = f"{label}: {score:.2f}"
 
     # Get text size
-    (text_width, text_height), baseline = cv2.getTextSize(label_text, **text_params)
+    (text_width, text_height), _baseline = cv2.getTextSize(label_text, **text_params)
     border = 5
     text_width += border
     text_height += border

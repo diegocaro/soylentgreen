@@ -1,7 +1,6 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from collections.abc import Sequence
 
 from api.config import DEFAULT_CAMERA_ID
 from api.models import (
@@ -39,7 +38,7 @@ class Service:
         camera_ids = list(self._scan_result.cameras.keys())
         if DEFAULT_CAMERA_ID and DEFAULT_CAMERA_ID in camera_ids:
             camera_ids.remove(DEFAULT_CAMERA_ID)
-            camera_ids = [DEFAULT_CAMERA_ID] + camera_ids
+            camera_ids = [DEFAULT_CAMERA_ID, *camera_ids]
         cameras = [map_camera(camera_id) for camera_id in camera_ids]
         return cameras
 
