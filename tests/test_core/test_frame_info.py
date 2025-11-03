@@ -30,7 +30,7 @@ def test_frame_extraction(video_path, max_frames=200):
     print(f"Testing frame extraction from: {video_path}")
     reader = VideoReader(Path(video_path))
 
-    print(f"Video metadata:")
+    print("Video metadata:")
     print(f"  Resolution: {reader.width}x{reader.height}")
     print(f"  FPS: {reader.fps}")
     print(f"  Duration: {reader.duration} seconds")

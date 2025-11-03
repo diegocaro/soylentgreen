@@ -1,10 +1,7 @@
 import argparse
 import os
-import threading
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from queue import Queue
 
 import cv2
 import numpy as np
@@ -90,7 +87,7 @@ def post_process(
     thickness = 2
 
     # Get text size
-    (text_width, text_height), baseline = cv2.getTextSize(
+    (_text_width, text_height), _baseline = cv2.getTextSize(
         text, font, font_scale, thickness
     )
 

@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import ClassVar
 
 from ..providers.aqara import AqaraProvider
 from .provider import CameraProvider
@@ -23,7 +24,7 @@ class NoCompatibleProviderError(TimelineError):
 class TimelineFactory:
     """Factory for creating timelines with the appropriate provider."""
 
-    PROVIDERS: list[CameraProvider] = [AqaraProvider()]
+    PROVIDERS: ClassVar[list[CameraProvider]] = [AqaraProvider()]
 
     @classmethod
     def create_timeline(cls, clips_path: Path) -> Timeline:

@@ -1,0 +1,20 @@
+services:
+  soylentgreen:
+    image: ghcr.io/diegocaro/soylentgreen:latest
+    ports:
+      - '8000:80' 
+    env_file:
+      - .env
+    volumes:
+      - data:/data
+      - videos:/videos
+    # command: |
+    #   sh -c '
+    #     uv run uvicorn api.app:app --host 0.0.0.0 --port 8000
+    #   '
+
+
+
+volumes:
+  videos:
+  data:

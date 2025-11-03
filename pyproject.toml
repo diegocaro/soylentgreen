@@ -53,6 +53,7 @@ fix = true
 [tool.ruff.lint]
 select = [
     "UP", # modernize python
+    "RUF", # ruff specific rules
 ]
 ignore = [
     "E731" # lambda assignment
