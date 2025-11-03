@@ -8,10 +8,13 @@ class CameraInfo(BaseModel):
     name: str
 
 
-class VideoSegment(BaseModel):
-    name: str
+class TimeInterval(BaseModel):
     start: datetime
     end: datetime
+
+
+class VideoSegment(TimeInterval):
+    name: str
     path: str  # Relative path to the video file
 
 
@@ -39,24 +42,8 @@ class VideoDetectionSummary(BaseModel):
     detections: dict[str, list[LabeledInterval]]  # key: video segment path
 
 
-class TimeInterval(BaseModel):
-    start: datetime
-    end: datetime
-
-
-class IntervalTimestamp(BaseModel):
-    start: datetime
-    end: datetime
-
-    # @field_validator("end")
-    # def end_after_start(cls, v, info):
-    #     if "start" in info.data and v <= info.data["start"]:
-    #         raise ValueError("end must be after start")
-    #     return v
-
-
 class LabelTimeline(BaseModel):
-    intervals: list[IntervalTimestamp]
+    intervals: list[TimeInterval]
 
 
 class CameraLabels(BaseModel):

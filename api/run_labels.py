@@ -6,10 +6,10 @@ from pathlib import Path
 from api.config import BOX_DETECTION_FILE, LABELS_TIMELINE_FILE, SCAN_RESULT_FILE
 from api.models import (
     CameraLabels,
-    IntervalTimestamp,
     LabelsByCamera,
     LabelTimeline,
     ScanResult,
+    TimeInterval,
     VideoDetectionSummary,
 )
 
@@ -48,7 +48,7 @@ def absolute_intervals(
                     absolute_by_camera[camera_id][interval.label] = []
 
                 absolute_by_camera[camera_id][interval.label].append(
-                    IntervalTimestamp(
+                    TimeInterval(
                         start=start_dt,
                         end=end_dt,
                     )
