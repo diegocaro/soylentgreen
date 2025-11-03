@@ -70,7 +70,7 @@ class VideoLoop:
 
             try:
                 new_pred_frame_id, new_predictions = pred_q.get_nowait()
-            except:
+            except Exception:
                 # if queue not ready, just fill with old predictions
                 new_pred_frame_id, new_predictions = pred_frame_id, predictions
             pred_frame_id, predictions = new_pred_frame_id, new_predictions
@@ -84,7 +84,7 @@ def consume_frames(frame_q: Queue[tuple[int, ImageCV]]) -> tuple[int, ImageCV]:
         frame_id, frame = frame_q.get()
         try:
             frame_id, frame = frame_q.get_nowait()
-        except:
+        except Exception:
             break
     return frame_id, frame  # type: ignore
 
@@ -100,7 +100,7 @@ def predict_loop(
         while not frame_q.empty():
             try:
                 frame_id, frame = frame_q.get_nowait()
-            except:
+            except Exception:
                 break
         skipped_frames = frame_id - old_frame_id
         print(f"Skipped frames {skipped_frames}")

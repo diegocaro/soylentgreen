@@ -146,7 +146,7 @@ class VideoProcessor:
             while not self.clip_queue.empty():
                 try:
                     selected_clip = self.clip_queue.get_nowait()
-                except:
+                except Exception:
                     break
 
             # Signal to the UI that a new clip is being processed

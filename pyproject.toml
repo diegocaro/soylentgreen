@@ -51,11 +51,11 @@ package = true
 fix = true
 
 [tool.ruff.lint]
-select = [
+extend-select = [
     "UP", # modernize python
     "RUF", # ruff specific rules
 ]
-ignore = [
+extend-ignore = [
     "E731" # lambda assignment
 ]
 
