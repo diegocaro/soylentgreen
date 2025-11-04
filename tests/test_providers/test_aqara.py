@@ -15,6 +15,3 @@ def test_extract_timestamp_timezone(monkeypatch, tz_name):
     ts = provider.extract_timestamp(path)
     expected_dt = datetime(2025, 2, 7, 8, 29, 0, tzinfo=ZoneInfo(tz_name))
     assert ts == expected_dt
-
-
-# Optionally, add more tests for different timezones
