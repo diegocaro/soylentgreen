@@ -1,6 +1,7 @@
 import logging
 import os
 from datetime import datetime
+from functools import cached_property
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -48,7 +49,7 @@ class AqaraProvider(CameraProvider):
         camera_id = self._extract_camera_id_from_path(path)
         return Clip(camera_id=camera_id, path=path, timestamp=timestamp)
 
-    @property
+    @cached_property
     def timezone(self) -> ZoneInfo:
         # Read timezone from environment variable AQARA_TIMEZONE, default to UTC
         _tz_name = os.environ.get("AQARA_TIMEZONE", "UTC")
