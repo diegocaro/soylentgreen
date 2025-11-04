@@ -67,7 +67,7 @@ class AqaraProvider(CameraProvider):
         try:
             naive_dt = datetime.strptime(f"{yyyymmdd}{hhmmss}", "%Y%m%d%H%M%S")
         except ValueError as e:
-            raise ValueError(f"Invalid Aqara clip path format") from e
+            raise ValueError("Invalid Aqara clip path format") from e
         localized_dt = naive_dt.replace(tzinfo=self.timezone)
         return localized_dt
 
