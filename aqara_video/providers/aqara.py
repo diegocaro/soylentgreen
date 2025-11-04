@@ -1,8 +1,15 @@
+import logging
+import os
 from datetime import datetime
+from functools import cached_property
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..core.clip import Clip
 from ..core.provider import CameraProvider
+
+logger = logging.getLogger(__name__)
+
 
 AQARA_PREFIX_DIR = "lumi1."
 
@@ -24,8 +31,17 @@ class AqaraProvider(CameraProvider):
 
     def load_clips(self, path: Path) -> list[Clip]:
         """Load clips from the specified path using Aqara's format."""
-        files = [self.create_clip(file) for file in path.glob("*/*.mp4")]
-        return sorted(files, key=lambda clip: clip.timestamp)
+        clips = []
+        files = list(path.glob("*/*.mp4"))
+        logger.info(f"Loading clips from {path}, found {len(files)} files")
+        for file in files:
+            try:
+                clip = self.create_clip(file)
+                clips.append(clip)
+            except ValueError as e:
+                logger.warning(f"Skipping file {file}: {e}")
+                continue
+        return sorted(clips, key=lambda clip: clip.timestamp)
 
     def create_clip(self, path: Path) -> Clip:
         """Create an Aqara clip from a file path."""
@@ -33,14 +49,28 @@ class AqaraProvider(CameraProvider):
         camera_id = self._extract_camera_id_from_path(path)
         return Clip(camera_id=camera_id, path=path, timestamp=timestamp)
 
+    @cached_property
+    def timezone(self) -> ZoneInfo:
+        # Read timezone from environment variable AQARA_TIMEZONE, default to UTC
+        _tz_name = os.environ.get("AQARA_TIMEZONE", "UTC")
+        try:
+            zone = ZoneInfo(_tz_name)
+        except ZoneInfoNotFoundError:
+            logger.warning(f"Invalid timezone '{_tz_name}', defaulting to UTC.")
+            zone = ZoneInfo("UTC")
+        return zone
+
     def extract_timestamp(self, path: Path) -> datetime:
         """Extract timestamp from Aqara path format."""
-        # lumi1.54ef44457bc9/20250207/082900.mp4 -> 2025-02-07 08:29:00 UTC or local timezone
-        # depending on the camera/home settings in Aqara app
+        # lumi1.54ef44457bc9/20250207/082900.mp4 -> 2025-02-07 08:29:00 in configured timezone
         hhmmss = path.stem
         yyyymmdd = path.parent.stem
-        timestamp = datetime.strptime(f"{yyyymmdd}{hhmmss}", "%Y%m%d%H%M%S")
-        return timestamp.astimezone()
+        try:
+            naive_dt = datetime.strptime(f"{yyyymmdd}{hhmmss}", "%Y%m%d%H%M%S")
+        except ValueError as e:
+            raise ValueError("Invalid Aqara clip path format") from e
+        localized_dt = naive_dt.replace(tzinfo=self.timezone)
+        return localized_dt
 
     def _extract_camera_id_from_path(self, path: Path) -> str:
         """Extract camera ID from Aqara path format."""
