@@ -2,7 +2,7 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..core.clip import Clip
 from ..core.provider import CameraProvider
@@ -54,7 +54,7 @@ class AqaraProvider(CameraProvider):
         _tz_name = os.environ.get("AQARA_TIMEZONE", "UTC")
         try:
             zone = ZoneInfo(_tz_name)
-        except Exception:
+        except ZoneInfoNotFoundError:
             logger.warning(f"Invalid timezone '{_tz_name}', defaulting to UTC.")
             zone = ZoneInfo("UTC")
         return zone
