@@ -1,0 +1,16 @@
+# data-related 
+sample-videos/
+data/
+output/
+
+# not really needed
+*.ipynb
+tests/
+.venv/
+
+# extra files
+__pycache__/
+*.pyc
+
+
+
