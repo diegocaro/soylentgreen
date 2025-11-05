@@ -12,6 +12,12 @@ dependencies = [
     "joblib>=1.3.2,<2",
     "numpy>=2.2.3,<3; sys_platform != 'darwin' or platform_machine != 'x86_64'", # For Arm-based Macs
     "numpy<2; sys_platform == 'darwin' and platform_machine == 'x86_64'", # For my old Intel-based Mac
+
+    # API dependencies
+    "fastapi>=0.120.0",
+    "uvicorn>=0.38.0",
+    "dotenv>=0.9.9",
+    "pydantic>=2.12.3",
 ]
 
 [project.scripts]
@@ -34,13 +40,6 @@ ml = [
     "torchvision==0.17.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
 ]
 
-api = [
-    "fastapi>=0.120.0",
-    "uvicorn>=0.38.0",
-    "dotenv>=0.9.9",
-    "pydantic>=2.12.3",
-]
-
 [tool.hatch.build.targets.sdist]
 include = ["aqara_video"]
 
@@ -53,7 +52,6 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 package = true
-default-groups = ["api", "ml"]
 
 [tool.ruff]
 fix = true
