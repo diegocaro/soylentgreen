@@ -11,10 +11,10 @@ COPY . /app
 WORKDIR /app
 
 # Install the application dependencies.
-RUN uv sync --frozen --no-cache
+RUN uv sync --frozen --no-cache --no-dev --group api 
 
 # Expose port
 EXPOSE 8000
 
 # Run the application.
-CMD ["uv", "run", "uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "--no-sync", "uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8000"]
