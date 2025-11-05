@@ -34,12 +34,13 @@ ml = [
     "torchvision==0.17.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
 ]
 
-api =[
+api = [
     "fastapi>=0.120.0",
     "uvicorn>=0.38.0",
     "dotenv>=0.9.9",
     "pydantic>=2.12.3",
 ]
+
 [tool.hatch.build.targets.sdist]
 include = ["aqara_video"]
 
@@ -52,6 +53,7 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 package = true
+default-groups = ["api", "ml"]
 
 [tool.ruff]
 fix = true
