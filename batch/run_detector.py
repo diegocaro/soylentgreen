@@ -6,8 +6,8 @@ from typing import Any
 from joblib import Parallel, delayed
 
 from api.config import BOX_DETECTION_FILE, SCAN_RESULT_FILE, VIDEO_DIR
-from api.detector import YellowBoxDetector
-from api.models import LabeledInterval, ScanResult, VideoDetectionSummary
+from api.schemas import LabeledInterval, ScanResult, VideoDetectionSummary
+from detection.yellow_box_detector import YellowBoxDetector
 
 logging.basicConfig(level=logging.INFO)
 

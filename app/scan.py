@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 
 from api.config import CLIP_DURATION
-from api.models import VideoList, VideoSegment
+from api.schemas import VideoList, VideoSegment
 from video_footage.core.clip import Clip
 from video_footage.core.factory import TimelineFactory
 from video_footage.providers.aqara import AqaraProvider

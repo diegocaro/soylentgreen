@@ -11,7 +11,7 @@ from .config import (
     SCAN_RESULT_FILE,
     VIDEO_DIR,
 )
-from .models import CameraInfo, CameraLabels, LabelsByCamera, ScanResult, TimeInterval
+from .schemas import CameraInfo, CameraLabels, LabelsByCamera, ScanResult, TimeInterval
 from .service import Service
 
 # Configure logging with timestamp

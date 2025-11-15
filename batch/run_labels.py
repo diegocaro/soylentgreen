@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 
 from api.config import BOX_DETECTION_FILE, LABELS_TIMELINE_FILE, SCAN_RESULT_FILE
-from api.models import (
+from api.schemas import (
     CameraLabels,
     LabelsByCamera,
     LabelTimeline,
