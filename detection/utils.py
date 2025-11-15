@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import cv2
 from torch import Tensor
 
-from aqara_video.core.types import ImageCV
+from video_footage.core.types import ImageCV
 
 
 @dataclass

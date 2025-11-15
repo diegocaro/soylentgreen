@@ -1,4 +1,4 @@
-from aqara_video.cli.timelapse import parse_datetime
+from cli.timelapse import parse_datetime
 
 
 class TestParseDateTime:

@@ -6,8 +6,8 @@ from unittest.mock import Mock
 import pytest
 from pytest import MonkeyPatch
 
-from aqara_video.core.clip import Clip
-from aqara_video.core.video_reader import Format, VideoMetadata, VideoStream
+from video_footage.core.clip import Clip
+from video_footage.core.video_reader import Format, VideoMetadata, VideoStream
 
 
 @pytest.fixture
@@ -58,7 +58,7 @@ def mock_video_reader(
     mock_reader.instance = mock_reader_instance
 
     # Patch the VideoReader import in the clip module
-    monkeypatch.setattr("aqara_video.core.clip.VideoReader", mock_reader)
+    monkeypatch.setattr("video_footage.core.clip.VideoReader", mock_reader)
 
     return mock_reader
 

@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 import pytest
 
-from aqara_video.core.video_reader import (
+from video_footage.core.video_reader import (
     Format,
     VideoFrame,
     VideoMetadata,

@@ -5,9 +5,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from aqara_video.core.clip import Clip
-from aqara_video.core.provider import CameraProvider
-from aqara_video.core.timeline import InvalidCameraDirError, Timeline
+from video_footage.core.clip import Clip
+from video_footage.core.provider import CameraProvider
+from video_footage.core.timeline import InvalidCameraDirError, Timeline
 
 
 @pytest.fixture

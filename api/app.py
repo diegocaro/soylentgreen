@@ -4,21 +4,15 @@ from datetime import datetime
 from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 
-from api.config import (
+from .config import (
     CAMERA_MAP,
     LABELS_TIMELINE_FILE,
     ROOTDIR,
     SCAN_RESULT_FILE,
     VIDEO_DIR,
 )
-from api.models import (
-    CameraInfo,
-    CameraLabels,
-    LabelsByCamera,
-    ScanResult,
-    TimeInterval,
-)
-from api.service import Service
+from .models import CameraInfo, CameraLabels, LabelsByCamera, ScanResult, TimeInterval
+from .service import Service
 
 # Configure logging with timestamp
 logging.basicConfig(

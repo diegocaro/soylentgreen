@@ -3,8 +3,8 @@ from pathlib import Path
 
 import ffmpeg
 
-import aqara_video.core.constants as c
-from aqara_video.core.types import ImageCV
+import video_footage.core.constants as c
+from video_footage.core.types import ImageCV
 
 
 class VideoWriter:

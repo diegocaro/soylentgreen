@@ -7,10 +7,10 @@ import cv2
 import numpy as np
 from joblib import Parallel, delayed
 
-from aqara_video.core.clip import Clip
-from aqara_video.core.factory import TimelineFactory
-from aqara_video.core.types import ImageCV
-from aqara_video.core.video_writer import VideoWriter
+from video_footage.core.clip import Clip
+from video_footage.core.factory import TimelineFactory
+from video_footage.core.types import ImageCV
+from video_footage.core.video_writer import VideoWriter
 
 
 def is_graphical_environment():

@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from aqara_video.core.types import ImageCV
+from video_footage.core.types import ImageCV
 
 
 def encode_to_jpeg(frame: ImageCV, quality: int = 95) -> bytes:
