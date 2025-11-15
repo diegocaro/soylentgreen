@@ -2,8 +2,8 @@ import logging
 from datetime import datetime
 
 from api.config import SCAN_RESULT_FILE, VIDEO_DIR
-from api.models import ScanResult
-from api.scan import ScanManager
+from api.schemas import ScanResult
+from batch.scan import ScanManager
 
 logging.basicConfig(level=logging.INFO)
 

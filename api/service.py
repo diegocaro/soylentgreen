@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 from api.config import DEFAULT_CAMERA_ID
-from api.models import (
+from api.schemas import (
     CameraInfo,
     CameraLabels,
     LabelsByCamera,

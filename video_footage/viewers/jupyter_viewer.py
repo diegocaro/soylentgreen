@@ -18,12 +18,12 @@ from ipywidgets import (
     VBox,
 )
 
-from aqara_video.core.clip import Clip
-from aqara_video.core.factory import TimelineFactory
-from aqara_video.core.images import encode_to_jpeg
-from aqara_video.ml.detector import Detector
-from aqara_video.ml.utils import draw_boxes
-from aqara_video.providers.aqara import AqaraProvider
+from detection.detector import Detector
+from detection.utils import draw_boxes
+from video_footage.core.clip import Clip
+from video_footage.core.factory import TimelineFactory
+from video_footage.core.images import encode_to_jpeg
+from video_footage.providers.aqara import AqaraProvider
 
 MAPPING_CAMERAS = {
     "lumi1.54ef44457bc9": "Pasto",

@@ -4,21 +4,15 @@ from datetime import datetime
 from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 
-from api.config import (
+from .config import (
     CAMERA_MAP,
     LABELS_TIMELINE_FILE,
     ROOTDIR,
     SCAN_RESULT_FILE,
     VIDEO_DIR,
 )
-from api.models import (
-    CameraInfo,
-    CameraLabels,
-    LabelsByCamera,
-    ScanResult,
-    TimeInterval,
-)
-from api.service import Service
+from .schemas import CameraInfo, CameraLabels, LabelsByCamera, ScanResult, TimeInterval
+from .service import Service
 
 # Configure logging with timestamp
 logging.basicConfig(
@@ -31,10 +25,19 @@ app = FastAPI()
 
 
 def get_service() -> Service:
-    scan_result = ScanResult.model_validate_json(SCAN_RESULT_FILE.read_text())
-    labels_timeline = LabelsByCamera.model_validate_json(
-        LABELS_TIMELINE_FILE.read_text()
-    )
+    try:
+        scan_result = ScanResult.model_validate_json(SCAN_RESULT_FILE.read_text())
+    except FileNotFoundError:
+        scan_result = ScanResult(cameras={}, scanned_at=datetime.now())
+
+    try:
+        labels_timeline = LabelsByCamera.model_validate_json(
+            LABELS_TIMELINE_FILE.read_text()
+        )
+    except FileNotFoundError:
+        logger.warning("Labels timeline file not found, initializing empty labels.")
+        labels_timeline = LabelsByCamera(cameras={})
+
     return Service(
         root_dir=VIDEO_DIR,
         scan_result=scan_result,

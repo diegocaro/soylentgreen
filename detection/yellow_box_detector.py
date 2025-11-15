@@ -5,7 +5,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from aqara_video.core.video_reader import VideoReader
+from video_footage.core.video_reader import VideoReader
 
 logging.basicConfig(level=logging.INFO)
 

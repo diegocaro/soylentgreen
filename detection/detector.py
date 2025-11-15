@@ -3,9 +3,9 @@ from typing import Any
 import torch
 from torchvision import models, transforms
 
-from aqara_video.core.images import bgr_to_rgb
-from aqara_video.core.types import ImageCV
-from aqara_video.ml.utils import Prediction, to_predictions
+from detection.utils import Prediction, to_predictions
+from video_footage.core.images import bgr_to_rgb
+from video_footage.core.types import ImageCV
 
 
 class Detector:

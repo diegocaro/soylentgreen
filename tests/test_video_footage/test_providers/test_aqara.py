@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from aqara_video.providers.aqara import AqaraProvider
+from video_footage.providers.aqara import AqaraProvider
 
 
 @pytest.mark.parametrize("tz_name", ["UTC", "America/Santiago"])

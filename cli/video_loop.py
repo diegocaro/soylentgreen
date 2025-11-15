@@ -5,9 +5,9 @@ from queue import Queue
 
 import cv2
 
-from aqara_video.core.types import ImageCV
-from aqara_video.ml.detector import Detector
-from aqara_video.ml.utils import Prediction, draw_boxes
+from detection.detector import Detector
+from detection.utils import Prediction, draw_boxes
+from video_footage.core.types import ImageCV
 
 
 class VideoAbstract(ABC):

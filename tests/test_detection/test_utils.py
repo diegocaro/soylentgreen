@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from aqara_video.core.types import ImageCV
-from aqara_video.ml.utils import Box, Prediction, draw_box_with_label, draw_boxes
+from detection.utils import Box, Prediction, draw_box_with_label, draw_boxes
+from video_footage.core.types import ImageCV
 
 
 @pytest.fixture

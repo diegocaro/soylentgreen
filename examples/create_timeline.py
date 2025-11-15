@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from aqara_video.core.factory import TimelineFactory
-from aqara_video.core.video_reader import VideoReader
+from video_footage.core.factory import TimelineFactory
+from video_footage.core.video_reader import VideoReader
 
 # # Automatically detects provider
 timeline = TimelineFactory.create_timeline(

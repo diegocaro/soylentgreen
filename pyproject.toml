@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-timelapse = "aqara_video.cli.timelapse:main"
+timelapse = "cli.timelapse:main"
 
 [dependency-groups]
 dev = [
@@ -40,10 +40,10 @@ ml = [
 ]
 
 [tool.hatch.build.targets.sdist]
-include = ["aqara_video"]
+include = ["video_footage"]
 
 [tool.hatch.build.targets.wheel]
-include = ["aqara_video"]
+include = ["video_footage"]
 
 [build-system]
 requires = ["hatchling"]

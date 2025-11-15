@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from aqara_video.core.video_reader import VideoReader
+from video_footage.core.video_reader import VideoReader
 
 DEFAULT_VIDEO_PATH = "tests/videos/living_room.mp4"
 
