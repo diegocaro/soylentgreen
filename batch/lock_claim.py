@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import os
+import socket
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,6 +15,53 @@ def now_iso() -> str:
 
 def now_iso_safe() -> str:
     return now_iso().replace(":", "").replace("-", "")
+
+
+class FileClaimLockError(Exception):
+    pass
+
+
+class FileClaimLock:
+    def __init__(
+        self, file_path: Path, worker_id: str | None = None, lock_suffix: str = ".lock"
+    ):
+        self.file_path = file_path
+        self.lock_suffix = lock_suffix
+        self.lock_path = file_path.with_name(file_path.name + lock_suffix)
+        self.fd = None
+        self.info = None
+        # Default worker name is the hostname
+        self.worker_id = worker_id or socket.gethostname()
+
+    def __enter__(self):
+        flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+        try:
+            self.fd = os.open(self.lock_path, flags, 0o600)
+        except FileExistsError:
+            raise FileClaimLockError(f"Lock already claimed: {self.lock_path}")
+        except Exception as e:
+            raise FileClaimLockError(f"Failed to claim lock: {e}")
+
+        self.info = {
+            "worker_id": self.worker_id,
+            "claimed_at": now_iso(),
+            "job_id": uuid.uuid4().hex,
+        }
+        data = json.dumps(self.info).encode("utf-8")
+        os.write(self.fd, data)
+        os.fsync(self.fd)
+        return self.lock_path, self.info
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.fd is not None:
+            try:
+                os.close(self.fd)
+            except Exception:
+                pass
+        try:
+            self.lock_path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def try_claim(
@@ -120,6 +168,33 @@ def run_lock_claim_example(
         pass
 
 
+def run_lock_with_try_example(
+    video_path: Path,
+    worker: str,
+    model: Any,
+    prefix_file: str = "labels",
+    suffix_folder: str = "results",
+):
+
+    try:
+        with FileClaimLock(video_path, worker) as claim:
+            # run inference on video (replace with real code)
+            result: dict[str, object] = model.predict(video_path)
+            timestamp = now_iso_safe()
+            result_dir: Path = video_path.with_name(
+                f"{video_path.name}.{suffix_folder}"
+            )
+            result_dir.mkdir(parents=True, exist_ok=True)
+            result_path: Path = (
+                result_dir
+                / f"{prefix_file}-{result['model_name']}-{result['model_version']}-{timestamp}.json"
+            )
+            atomic_write_json(result_path, result)
+    except FileClaimLockError:
+        # someone else claimed it, skip
+        pass
+
+
 # usage example
 if __name__ == "__main__":
     video: Path = Path(
@@ -128,3 +203,5 @@ if __name__ == "__main__":
     worker: str = "gpu-1"
     model = DummyModel()
     run_lock_claim_example(video, worker, model)
+
+    run_lock_with_try_example(video, worker, model)
