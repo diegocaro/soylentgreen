@@ -175,7 +175,6 @@ def run_lock_with_try_example(
     prefix_file: str = "labels",
     suffix_folder: str = "results",
 ):
-
     try:
         with FileClaimLock(video_path, worker) as claim:
             # run inference on video (replace with real code)

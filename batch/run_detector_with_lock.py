@@ -12,7 +12,6 @@ from batch.lock_claim import (
     FileClaimLockError,
     atomic_write_json,
     now_iso_safe,
-    release_claim,
     try_claim,
 )
 from batch.scan import ScanManager
