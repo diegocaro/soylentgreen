@@ -5,14 +5,13 @@ from pathlib import Path
 
 from joblib import Parallel, delayed
 
-from api.config import VIDEO_DIR
-from api.schemas import LabeledInterval, ScanResult
+from api.config import BOX_DETECTION_FILE, SCAN_RESULT_FILE, VIDEO_DIR
+from api.schemas import LabeledInterval, ScanResult, VideoDetectionSummary
 from batch.lock_claim import (
     FileClaimLock,
     FileClaimLockError,
     atomic_write_json,
     now_iso_safe,
-    try_claim,
 )
 from batch.scan import ScanManager
 from detection.model_protocol import ModelProtocol
@@ -20,6 +19,20 @@ from detection.yellow_box_detector import YellowBoxDetector
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def load_detections() -> VideoDetectionSummary:
+    """Load existing detections from JSON file."""
+    if BOX_DETECTION_FILE.exists():
+        logger.info(f"Loading existing detections from {BOX_DETECTION_FILE}")
+        return VideoDetectionSummary.model_validate_json(BOX_DETECTION_FILE.read_text())
+    return VideoDetectionSummary(detections={})
+
+
+def save_detections(detections: VideoDetectionSummary):
+    """Save detections to JSON file."""
+    logger.info(f"Saving detections to {BOX_DETECTION_FILE}")
+    BOX_DETECTION_FILE.write_text(detections.model_dump_json(indent=2))
 
 
 class PredictionTask:
@@ -53,9 +66,6 @@ class PredictionTask:
             result_dir.exists() and any(result_dir.glob(result_pattern)) and not force
         )
 
-    def claim_video(self, full_video_path: Path):
-        return try_claim(full_video_path, self.worker_id)
-
     def save_result(self, video_path: Path, box_intervals, result_dir: Path):
         timestamp = now_iso_safe()
         result_dir.mkdir(parents=True, exist_ok=True)
@@ -76,7 +86,7 @@ class PredictionTask:
         atomic_write_json(result_path, result)
         logger.info(f"Stored prediction in {result_path}")
 
-    def run(self, video_path: Path, force: bool = False):
+    def run(self, video_path: Path, force: bool = False, post_detect_callback=None):
         full_video_path = self.get_full_video_path(video_path)
         result_dir = self.get_result_dir(full_video_path)
         if self.is_already_processed(result_dir, force):
@@ -107,13 +117,24 @@ class PredictionTask:
                 logger.info(f"No yellow boxes detected in {video_path}")
 
             self.save_result(video_path, box_intervals, result_dir)
-        except FileClaimLockError:
-            logger.info(f"Skipping {video_path} (already claimed by another worker)")
+        except FileClaimLockError as e:
+            logger.info(f"Skipping {video_path}: {e}")
             return video_path, None
         except Exception as e:
             logger.error(f"Error processing {video_path}: {e}")
             return video_path, None
-        return video_path, intervals
+
+        if post_detect_callback:
+            post_detect_callback(video_path, box_intervals)
+        return video_path, box_intervals
+
+
+def create_old_scan_callback(detections: VideoDetectionSummary):
+    def callback(video_path: Path, box_intervals):
+        detections.detections[str(video_path)] = box_intervals
+        save_detections(detections)
+
+    return callback
 
 
 def create_arg_parser():
@@ -150,6 +171,11 @@ def create_arg_parser():
         default=1,
         help="Number of parallel jobs to run.",
     )
+    parser.add_argument(
+        "--old-scan",
+        action="store_true",
+        help="Use existing scan result instead of rescanning videos.",
+    )
     return parser
 
 
@@ -166,8 +192,15 @@ if __name__ == "__main__":
 
     selected_cameras = set(args.camera) if args.camera else cameras
 
-    scan = {camera: manager.scan_videos(camera) for camera in selected_cameras}
-    scan_result = ScanResult(cameras=scan, scanned_at=datetime.now())
+    old_scan_callback = None
+    if args.old_scan:
+        logger.info(f"Loading existing scan result at {SCAN_RESULT_FILE}")
+        scan_result = ScanResult.model_validate_json(SCAN_RESULT_FILE.read_text())
+        detections = load_detections()
+        old_scan_callback = create_old_scan_callback(detections)
+    else:
+        scan = {camera: manager.scan_videos(camera) for camera in selected_cameras}
+        scan_result = ScanResult(cameras=scan, scanned_at=datetime.now())
 
     segments_to_process = []
     for camera_id, video_list in scan_result.cameras.items():
@@ -187,6 +220,7 @@ if __name__ == "__main__":
         delayed(video_task.run)(
             segment.path,
             args.force,
+            post_detect_callback=old_scan_callback,
         )
         for _camera_id, segment in segments_to_process
     )

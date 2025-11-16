@@ -37,10 +37,10 @@ class FileClaimLock:
         flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
         try:
             self.fd = os.open(self.lock_path, flags, 0o600)
-        except FileExistsError:
-            raise FileClaimLockError(f"Lock already claimed: {self.lock_path}")
+        except FileExistsError as e:
+            raise FileClaimLockError(f"Lock already claimed: {self.lock_path}") from e
         except Exception as e:
-            raise FileClaimLockError(f"Failed to claim lock: {e}")
+            raise FileClaimLockError(f"Failed to claim lock: {e}") from e
 
         self.info = {
             "worker_id": self.worker_id,

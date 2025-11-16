@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
 
 class ModelProtocol(Protocol):
