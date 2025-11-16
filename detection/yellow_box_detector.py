@@ -21,6 +21,9 @@ class YellowBoxDetector:
     FRAME_SKIP = 5  # analyze every 5th frame
     ACTIVE_INTERVAL = 2.0  # seconds
 
+    model_name = "yellow_box_detector"
+    model_version = "v1"
+
     def __init__(
         self,
         lower_yellow: np.ndarray = LOWER_YELLOW,
