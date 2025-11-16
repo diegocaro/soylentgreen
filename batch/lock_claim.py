@@ -176,7 +176,7 @@ def run_lock_with_try_example(
     suffix_folder: str = "results",
 ):
     try:
-        with FileClaimLock(video_path, worker) as claim:
+        with FileClaimLock(video_path, worker) as _claim:
             # run inference on video (replace with real code)
             result: dict[str, object] = model.predict(video_path)
             timestamp = now_iso_safe()

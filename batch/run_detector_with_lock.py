@@ -15,6 +15,7 @@ from batch.lock_claim import (
     try_claim,
 )
 from batch.scan import ScanManager
+from detection.model_protocol import ModelProtocol
 from detection.yellow_box_detector import YellowBoxDetector
 
 logging.basicConfig(level=logging.INFO)
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 class PredictionTask:
     def __init__(
         self,
-        model: YellowBoxDetector,
+        model: ModelProtocol,
         video_dir: Path,
         worker_id: str = "worker-1",
         prefix_file: str = "labels",
@@ -85,7 +86,7 @@ class PredictionTask:
             return video_path, None
 
         try:
-            with FileClaimLock(full_video_path, self.worker_id) as claim:
+            with FileClaimLock(full_video_path, self.worker_id):
                 logger.info(f"Claimed {video_path} for processing by {self.worker_id}")
             logger.info(f"Analyzing video: {full_video_path}")
             intervals = self.yellow_box_detector.predict(full_video_path)
@@ -115,42 +116,47 @@ class PredictionTask:
         return video_path, intervals
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run yellow box detection on videos.")
+def create_arg_parser():
+    parser = argparse.ArgumentParser(
+        description="Run Yellow Box Detector on videos with file locking."
+    )
+    parser.add_argument(
+        "--worker-id",
+        type=str,
+        default="worker-1",
+        help="Identifier for the worker process.",
+    )
     parser.add_argument(
         "--camera",
         "-c",
+        type=str,
         nargs="*",
-        help="Camera ID(s) to process. If not set, all cameras will be processed.",
+        help="List of camera IDs to process. If not provided, all cameras are processed.",
+    )
+    parser.add_argument(
+        "--only-locked",
+        action="store_true",
+        help="Process only videos that are already locked.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force re-processing of videos even if results already exist.",
     )
     parser.add_argument(
         "--jobs",
         "-j",
         type=int,
         default=1,
-        help="Number of parallel jobs to run (default: 1)",
+        help="Number of parallel jobs to run.",
     )
-    parser.add_argument(
-        "--worker-id",
-        "-w",
-        type=str,
-        default="worker-1",
-        help="Worker ID for claiming locks (default: worker-1)",
-    )
-    parser.add_argument(
-        "--force",
-        "-f",
-        action="store_true",
-        help="Force reprocessing even if results exist.",
-    )
-    parser.add_argument(
-        "--only-locked",
-        action="store_true",
-        help="Process only files with existing lock files (possibly stuck from another run)",
-    )
-    args = parser.parse_args()
+    return parser
 
-    yellow_box_detector = YellowBoxDetector()
+
+if __name__ == "__main__":
+    args = create_arg_parser().parse_args()
+
+    model = YellowBoxDetector()
 
     manager = ScanManager(VIDEO_DIR)
     cameras = manager.scan_cameras()
@@ -175,9 +181,7 @@ if __name__ == "__main__":
                     continue
             segments_to_process.append((camera_id, segment))
 
-    video_task = PredictionTask(
-        yellow_box_detector, VIDEO_DIR, args.worker_id, "labels", "results"
-    )
+    video_task = PredictionTask(model, VIDEO_DIR, args.worker_id, "labels", "results")
 
     Parallel(n_jobs=args.jobs, prefer="threads")(
         delayed(video_task.run)(
