@@ -19,3 +19,6 @@ CLIP_DURATION = timedelta(minutes=1)
 camera_map_str = os.getenv("CAMERA_MAP", "")
 CAMERA_MAP = dict(item.split(":") for item in camera_map_str.split(",") if item)
 DEFAULT_CAMERA_ID = os.getenv("DEFAULT_CAMERA_ID", "")
+
+# Database configuration
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATADIR}/soylentgreen.db")

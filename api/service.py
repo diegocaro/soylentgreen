@@ -3,61 +3,45 @@ from datetime import datetime
 from pathlib import Path
 
 from api.config import DEFAULT_CAMERA_ID
-from api.schemas import (
-    CameraInfo,
-    CameraLabels,
-    LabelsByCamera,
-    LabelTimeline,
-    ScanResult,
-    SeekResult,
-    TimeInterval,
-    VideoSegment,
-)
+from api.models import CameraSegment, LabelInterval
+from api.repository import Repository
+from api.database import get_session
+from api.schemas import CameraInfo, VideoSegment
 
 logger = logging.getLogger(__name__)
 
 
+
 class Service:
-    def __init__(
-        self,
-        root_dir: Path,
-        scan_result: ScanResult,
-        labels_timeline: LabelsByCamera,
-        camera_map: dict[str, str] | None = None,
-    ):
+    def __init__(self, root_dir: Path, camera_map: dict[str, str] | None = None):
         self._root_dir = root_dir
-        self._scan_result = scan_result
-        self._labels_timeline = labels_timeline
         self._camera_map = camera_map or {}
+        self._session = next(get_session())
+        self._repo = Repository(self._session)
 
     def list_cameras(self) -> list[CameraInfo]:
-        def map_camera(camera_id: str) -> CameraInfo:
-            name = self._camera_map.get(camera_id, camera_id)
-            return CameraInfo(id=camera_id, name=name)
-
-        camera_ids = list(self._scan_result.cameras.keys())
+        segments = self._repo.get_all(CameraSegment)
+        camera_ids = sorted({seg.camera_id for seg in segments})
         if DEFAULT_CAMERA_ID and DEFAULT_CAMERA_ID in camera_ids:
             camera_ids.remove(DEFAULT_CAMERA_ID)
             camera_ids = [DEFAULT_CAMERA_ID, *camera_ids]
-        cameras = [map_camera(camera_id) for camera_id in camera_ids]
-        return cameras
+        return [CameraInfo(id=cid, name=self._camera_map.get(cid, cid)) for cid in camera_ids]
 
     def list_videos(self, camera_id: str) -> list[VideoSegment]:
-        camera = self._scan_result.cameras[camera_id]
-        return camera.segments
+        segments = self._repo.get_all(CameraSegment)
+        videos = [VideoSegment(
+            start=seg.start,
+            end=seg.end,
+            name=seg.name,
+            path=seg.path
+        ) for seg in segments if seg.camera_id == camera_id]
+        return videos
 
     def get_video_path(self, relative_path: str) -> Path:
         full_path = self._root_dir / relative_path
         if not full_path.resolve().is_relative_to(self._root_dir.resolve()):
             raise ValueError("Invalid video path")
         return full_path
-
-    def _search(
-        self, segments: list[VideoSegment], target: datetime, return_next: bool = False
-    ) -> VideoSegment | None:
-        # assert segments are sorted by start time
-        assert all(
-            segments[i].start <= segments[i + 1].start for i in range(len(segments) - 1)
         )
 
         found_at = None
